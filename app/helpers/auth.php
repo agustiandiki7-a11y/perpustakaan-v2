@@ -102,6 +102,28 @@ function cekRole(array $roles): void
     }
 }
 
+/**
+ * Halaman peminjam (katalog publik, form pinjam, riwayat pinjam) cuma buat
+ * pengunjung & akun role 'peminjam'. Kalau yang login petugas/admin, tendang
+ * balik ke dashboard backend mereka + kasih pesan, biar gak ada halaman yang
+ * "sama tapi beda hak akses" bikin bingung.
+ */
+function cekAksesPeminjam(): void
+{
+    mulaiSession();
+
+    if (!sudahLogin()) {
+        return;
+    }
+
+    $role = $_SESSION['role'] ?? '';
+    if ($role === 'admin' || $role === 'petugas') {
+        setFlash('error', 'Akun staf (admin/petugas) gak dikasih akses ke halaman peminjam. Silakan pakai dashboard backend.');
+        header('Location: ' . baseUrlPath() . '/backend/' . $role . '/index.php');
+        exit;
+    }
+}
+
 function currentUser(): ?array
 {
     mulaiSession();

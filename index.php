@@ -8,7 +8,9 @@ ini_set('display_errors', '0'); // error tetap dicatat di log, gak ditampilin ke
 require_once __DIR__ . '/app/helpers/auth.php';
 mulaiSession();
 applySecurityHeaders();
+cekAksesPeminjam(); // staf (admin/petugas) diarahkan ke dashboard backend, bukan halaman peminjam
 $flash = getFlash();
+$me = currentUser();
 
 // ==========================================
 // KONEKSI DATABASE & INISIALISASI

@@ -3,7 +3,17 @@ require_once __DIR__ . '/../../app/config/Database.php';
 require_once __DIR__ . '/../../app/helpers/auth.php';
 
 mulaiSession();
-cekRole(['admin', 'petugas']);
+
+$routeRole = null;
+if (preg_match('#/backend/(admin|petugas)(?:/|$)#i', str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? ''), $match)) {
+    $routeRole = strtolower($match[1]);
+}
+
+if ($routeRole !== null) {
+    cekRole([$routeRole]);
+} else {
+    cekRole(['admin', 'petugas']);
+}
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !verifyCsrf($_POST['csrf_token'] ?? null)) {
     setFlash('error', 'Permintaan tidak valid.');

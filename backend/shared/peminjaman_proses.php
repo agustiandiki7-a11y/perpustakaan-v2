@@ -3,7 +3,17 @@ require_once __DIR__ . '/../../app/config/Database.php';
 require_once __DIR__ . '/../../app/helpers/auth.php';
 
 mulaiSession();
-cekRole(['admin', 'petugas']);
+
+$routeRole = null;
+if (preg_match('#/backend/(admin|petugas)(?:/|$)#i', str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? ''), $match)) {
+    $routeRole = strtolower($match[1]);
+}
+
+if ($routeRole !== null) {
+    cekRole([$routeRole]);
+} else {
+    cekRole(['admin', 'petugas']);
+}
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !verifyCsrf($_POST['csrf_token'] ?? null)) {
     setFlash('error', 'Permintaan tidak valid.');
@@ -21,6 +31,34 @@ $catatan = trim($_POST['catatan'] ?? '');
 
 if ($user_id <= 0 || $book_id <= 0 || $tanggal_pinjam === '' || $tanggal_jatuh_tempo === '') {
     setFlash('error', 'Semua kolom wajib diisi.');
+    header('Location: index.php');
+    exit;
+}
+
+// Validasi tanggal di server, jangan cuma andalin atribut min/max di HTML (gampang dibypass).
+$today = new DateTime('today');
+$pinjamDate = DateTime::createFromFormat('!Y-m-d', $tanggal_pinjam) ?: null;
+$kembaliDate = DateTime::createFromFormat('!Y-m-d', $tanggal_jatuh_tempo) ?: null;
+
+if (
+    !$pinjamDate || !$kembaliDate ||
+    $pinjamDate->format('Y-m-d') !== $tanggal_pinjam ||
+    $kembaliDate->format('Y-m-d') !== $tanggal_jatuh_tempo
+) {
+    setFlash('error', 'Format tanggal tidak valid.');
+    header('Location: index.php');
+    exit;
+}
+
+if ($pinjamDate < $today) {
+    setFlash('error', 'Tanggal pinjam gak boleh sebelum hari ini.');
+    header('Location: index.php');
+    exit;
+}
+
+$maxKembali = (clone $pinjamDate)->modify('+7 days');
+if ($kembaliDate < $pinjamDate || $kembaliDate > $maxKembali) {
+    setFlash('error', 'Tanggal pengembalian harus dalam rentang 1–7 hari setelah tanggal pinjam.');
     header('Location: index.php');
     exit;
 }

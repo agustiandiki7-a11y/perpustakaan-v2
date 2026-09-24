@@ -6,12 +6,16 @@ require_once __DIR__ . '/../layouts/sidebar.php';
 
 $editData = null;
 if (isset($_GET['edit'])) {
-    $stmt = $db->prepare('SELECT id, nama, username, email, role FROM users WHERE id = ?');
+    $stmt = $db->prepare("SELECT id, nama, username, email, role FROM users WHERE id = ? AND role != 'admin'");
     $stmt->execute([(int) $_GET['edit']]);
     $editData = $stmt->fetch() ?: null;
 }
 
-$users = $db->query("SELECT id, nama, username, email, role, created_at FROM users ORDER BY id DESC")->fetchAll();
+// Akun admin sengaja gak ditampilkan di sini — halaman ini buat ngelola staf & anggota,
+// bukan akun admin lain. Kalau memang perlu, akun admin diatur langsung lewat database.
+$users = $db->query("SELECT id, nama, username, email, role, created_at FROM users WHERE role != 'admin' ORDER BY FIELD(role, 'petugas', 'peminjam'), id DESC")->fetchAll();
+
+$isEditPeminjam = $editData && $editData['role'] === 'peminjam';
 ?>
 
 <div class="panel mb-4">
@@ -27,10 +31,20 @@ $users = $db->query("SELECT id, nama, username, email, role, created_at FROM use
             <input type="hidden" name="action" value="create">
         <?php endif; ?>
 
+        <?php if ($isEditPeminjam): ?>
+            <div class="alert-flash alert-error" style="margin-bottom:1rem;">
+                <i class="fas fa-circle-info"></i>
+                Data pribadi (nama, username, email, password) akun peminjam dikunci dari halaman admin.
+                Data itu milik &amp; diinput sendiri oleh peminjam saat daftar, jadi admin cuma bisa
+                mengubah <strong>peran</strong> (mis. mempromosikan jadi petugas) atau menghapus akunnya.
+                Kalau peminjam perlu ubah data pribadinya, arahkan dia login sendiri (fitur ubah profil bisa
+                ditambahkan menyusul) — ini buat jaga integritas data yang mereka input sendiri.
+            </div>
+        <?php endif; ?>
         <div class="row g-3">
             <div class="col-md-3">
                 <label class="form-label">Nama</label>
-                <input type="text" name="nama" class="form-control" required
+                <input type="text" name="nama" class="form-control" required <?= $isEditPeminjam ? 'readonly' : '' ?>
                        value="<?= htmlspecialchars($editData['nama'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
             </div>
             <div class="col-md-3">
@@ -40,20 +54,25 @@ $users = $db->query("SELECT id, nama, username, email, role, created_at FROM use
             </div>
             <div class="col-md-3">
                 <label class="form-label">Email</label>
-                <input type="email" name="email" class="form-control" required
+                <input type="email" name="email" class="form-control" required <?= $isEditPeminjam ? 'readonly' : '' ?>
                        value="<?= htmlspecialchars($editData['email'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
             </div>
             <div class="col-md-3">
                 <label class="form-label">Role</label>
                 <select name="role" class="form-control">
-                    <?php foreach (['peminjam', 'petugas', 'admin'] as $r): ?>
+                    <?php foreach (['peminjam', 'petugas'] as $r): ?>
                         <option value="<?= $r ?>" <?= ($editData['role'] ?? 'peminjam') === $r ? 'selected' : '' ?>><?= ucfirst($r) ?></option>
                     <?php endforeach; ?>
                 </select>
+                <p class="form-hint">Akun admin gak dikelola dari sini.</p>
             </div>
             <div class="col-md-6">
-                <label class="form-label">Password <?= $editData ? '(kosongkan kalau gak ganti)' : '' ?></label>
-                <input type="password" name="password" class="form-control" <?= $editData ? '' : 'required' ?>>
+                <label class="form-label">
+                    Password <?= $editData ? '(kosongkan kalau gak ganti)' : '' ?>
+                    <?= $isEditPeminjam ? '— dikunci untuk akun peminjam' : '' ?>
+                </label>
+                <input type="password" name="password" class="form-control"
+                       <?= $editData ? '' : 'required' ?> <?= $isEditPeminjam ? 'disabled' : '' ?>>
             </div>
         </div>
 

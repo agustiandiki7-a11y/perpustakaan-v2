@@ -61,7 +61,7 @@ $recentLoans = $stmtRecent ? $stmtRecent->fetchAll() : [];
                     <th>Kode</th>
                     <th>Peminjam</th>
                     <th>Tgl Pinjam</th>
-                    <th>Jatuh Tempo</th>
+                    <th>Batas Kembali</th>
                     <th>Status</th>
                 </tr>
             </thead>

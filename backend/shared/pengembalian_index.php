@@ -18,6 +18,21 @@ $stmt = $db->query("
 ");
 $activeLoans = $stmt->fetchAll();
 $today = new DateTime();
+
+// Riwayat: buku yang sudah pernah dipinjam & sudah kembali (tepat waktu ataupun telat).
+$stmtRiwayat = $db->query("
+    SELECT loans.*, users.nama AS nama_peminjam,
+           GROUP_CONCAT(books.judul SEPARATOR ', ') AS judul_buku
+    FROM loans
+    LEFT JOIN users ON users.id = loans.user_id
+    LEFT JOIN loan_details ON loan_details.loan_id = loans.id
+    LEFT JOIN books ON books.id = loan_details.book_id
+    WHERE loans.status IN ('dikembalikan', 'terlambat')
+    GROUP BY loans.id
+    ORDER BY loans.tanggal_kembali DESC, loans.id DESC
+    LIMIT 100
+");
+$riwayatLoans = $stmtRiwayat->fetchAll();
 ?>
 
 <div class="panel">
@@ -27,7 +42,7 @@ $today = new DateTime();
     </div>
     <div class="table-wrap">
         <table class="data-table">
-            <thead><tr><th>Kode</th><th>Peminjam</th><th>Buku</th><th>Jatuh Tempo</th><th>Status</th><th>Aksi</th></tr></thead>
+            <thead><tr><th>Kode</th><th>Peminjam</th><th>Buku</th><th>Batas Kembali</th><th>Status</th><th>Aksi</th></tr></thead>
             <tbody>
                 <?php if (empty($activeLoans)): ?>
                     <tr><td colspan="6" class="text-center text-muted py-4">Gak ada peminjaman aktif saat ini.</td></tr>
@@ -58,6 +73,31 @@ $today = new DateTime();
                                     <button type="submit" class="btn-brand"><i class="fas fa-check"></i> Kembalikan</button>
                                 </form>
                             </td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="panel mt-4">
+    <div class="panel-heading"><h2>Riwayat Peminjaman &amp; Pengembalian (<?= count($riwayatLoans) ?>)</h2></div>
+    <div class="table-wrap">
+        <table class="data-table">
+            <thead><tr><th>Kode</th><th>Peminjam</th><th>Buku</th><th>Batas Kembali</th><th>Tgl Kembali</th><th>Status</th></tr></thead>
+            <tbody>
+                <?php if (empty($riwayatLoans)): ?>
+                    <tr><td colspan="6" class="text-center text-muted py-4">Belum ada riwayat pengembalian.</td></tr>
+                <?php else: ?>
+                    <?php foreach ($riwayatLoans as $loan): ?>
+                        <tr>
+                            <td><?= htmlspecialchars($loan['kode_peminjaman'], ENT_QUOTES, 'UTF-8') ?></td>
+                            <td><?= htmlspecialchars($loan['nama_peminjam'] ?? '-', ENT_QUOTES, 'UTF-8') ?></td>
+                            <td><?= htmlspecialchars($loan['judul_buku'] ?? '-', ENT_QUOTES, 'UTF-8') ?></td>
+                            <td><?= htmlspecialchars($loan['tanggal_jatuh_tempo'], ENT_QUOTES, 'UTF-8') ?></td>
+                            <td><?= htmlspecialchars($loan['tanggal_kembali'] ?? '-', ENT_QUOTES, 'UTF-8') ?></td>
+                            <td><span class="badge-pill badge-<?= htmlspecialchars($loan['status'], ENT_QUOTES, 'UTF-8') ?>"><?= ucfirst($loan['status']) ?></span></td>
                         </tr>
                     <?php endforeach; ?>
                 <?php endif; ?>

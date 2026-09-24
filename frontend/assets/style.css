@@ -72,6 +72,28 @@ a {
     color: #fff;
 }
 
+.nav-user-pill {
+    font-weight: 600;
+    color: var(--color-primary);
+    padding: 0.4rem 0.8rem;
+    font-size: 0.9rem;
+}
+
+.btn-nav-logout {
+    background-color: transparent;
+    color: var(--color-primary);
+    border: 1.5px solid var(--color-primary);
+    border-radius: 999px;
+    padding: 0.45rem 1.1rem;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.btn-nav-logout:hover {
+    background-color: var(--color-primary);
+    color: #fff;
+}
+
 /* ============================================================
    HERO
    ============================================================ */
@@ -381,6 +403,15 @@ a {
 .book-borrow-link:hover {
     color: var(--color-primary-dark);
     border-color: var(--color-primary-dark);
+}
+
+.book-borrow-disabled {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--color-ink-soft);
+    border-bottom: 1.5px solid var(--color-border);
+    padding-bottom: 1px;
+    cursor: not-allowed;
 }
 
 .katalog-empty,

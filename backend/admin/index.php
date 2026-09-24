@@ -1,1 +1,2 @@
-<?php require __DIR__ . "/../shared/dashboard.php";
+<?php
+require __DIR__ . "/../shared/dashboard.php";

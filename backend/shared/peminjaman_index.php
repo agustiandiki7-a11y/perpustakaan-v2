@@ -45,11 +45,16 @@ $loans = $stmt->fetchAll();
             </div>
             <div class="col-md-2">
                 <label class="form-label">Tgl Pinjam</label>
-                <input type="date" name="tanggal_pinjam" class="form-control" required value="<?= date('Y-m-d') ?>">
+                <input type="date" id="tanggalPinjam" name="tanggal_pinjam" class="form-control" required
+                       min="<?= date('Y-m-d') ?>" value="<?= date('Y-m-d') ?>">
+                <p class="form-hint">Gak bisa pilih tanggal sebelum hari ini.</p>
             </div>
             <div class="col-md-2">
-                <label class="form-label">Jatuh Tempo</label>
-                <input type="date" name="tanggal_jatuh_tempo" class="form-control" required value="<?= date('Y-m-d', strtotime('+7 days')) ?>">
+                <label class="form-label">Tanggal Pengembalian</label>
+                <input type="date" id="tanggalKembali" name="tanggal_jatuh_tempo" class="form-control" required
+                       min="<?= date('Y-m-d') ?>" max="<?= date('Y-m-d', strtotime('+7 days')) ?>"
+                       value="<?= date('Y-m-d', strtotime('+7 days')) ?>">
+                <p class="form-hint">Maks. 7 hari dari tanggal pinjam.</p>
             </div>
             <div class="col-md-2">
                 <label class="form-label">Catatan</label>
@@ -66,7 +71,7 @@ $loans = $stmt->fetchAll();
     <div class="panel-heading"><h2>Riwayat Peminjaman (<?= count($loans) ?>)</h2></div>
     <div class="table-wrap">
         <table class="data-table">
-            <thead><tr><th>Kode</th><th>Peminjam</th><th>Buku</th><th>Pinjam</th><th>Jatuh Tempo</th><th>Status</th></tr></thead>
+            <thead><tr><th>Kode</th><th>Peminjam</th><th>Buku</th><th>Pinjam</th><th>Tgl Pengembalian</th><th>Status</th></tr></thead>
             <tbody>
                 <?php if (empty($loans)): ?>
                     <tr><td colspan="6" class="text-center text-muted py-4">Belum ada peminjaman.</td></tr>
@@ -86,5 +91,36 @@ $loans = $stmt->fetchAll();
         </table>
     </div>
 </div>
+
+<script>
+(function () {
+    var tglPinjam = document.getElementById('tanggalPinjam');
+    var tglKembali = document.getElementById('tanggalKembali');
+    if (!tglPinjam || !tglKembali) return;
+
+    function toDateStr(d) {
+        return d.toISOString().slice(0, 10);
+    }
+
+    function syncKembaliRange() {
+        var pinjam = new Date(tglPinjam.value + 'T00:00:00');
+        if (isNaN(pinjam.getTime())) return;
+
+        var maxKembali = new Date(pinjam);
+        maxKembali.setDate(maxKembali.getDate() + 7);
+
+        tglKembali.min = toDateStr(pinjam);
+        tglKembali.max = toDateStr(maxKembali);
+
+        // Kalau nilai lama sudah di luar rentang baru, sesuaikan otomatis.
+        if (tglKembali.value < tglKembali.min || tglKembali.value > tglKembali.max) {
+            tglKembali.value = toDateStr(maxKembali);
+        }
+    }
+
+    tglPinjam.addEventListener('change', syncKembaliRange);
+    syncKembaliRange();
+})();
+</script>
 
 <?php require_once __DIR__ . '/../layouts/footer.php'; ?>

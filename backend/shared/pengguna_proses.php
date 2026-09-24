@@ -21,7 +21,8 @@ try {
         $username = trim($_POST['username'] ?? '');
         $email = trim($_POST['email'] ?? '');
         $password = $_POST['password'] ?? '';
-        $role = in_array($_POST['role'] ?? '', ['admin', 'petugas', 'peminjam'], true) ? $_POST['role'] : 'peminjam';
+        // Akun admin gak dibuat/diubah dari halaman ini — cuma petugas & peminjam.
+        $role = in_array($_POST['role'] ?? '', ['petugas', 'peminjam'], true) ? $_POST['role'] : 'peminjam';
 
         if ($nama === '' || $username === '' || $email === '' || $password === '') {
             setFlash('error', 'Semua kolom wajib diisi.');
@@ -48,10 +49,35 @@ try {
 
     } elseif ($action === 'update') {
         $id = (int) ($_POST['id'] ?? 0);
+
+        // Ambil role ASLI dari database dulu — jangan percaya field tersembunyi/hasil tampering
+        // dari form. Akun admin gak boleh diubah lewat halaman ini sama sekali.
+        $cekTarget = $db->prepare('SELECT role FROM users WHERE id = ?');
+        $cekTarget->execute([$id]);
+        $target = $cekTarget->fetch();
+
+        if (!$target || $target['role'] === 'admin') {
+            setFlash('error', 'Pengguna tidak ditemukan atau tidak bisa diubah dari halaman ini.');
+            header('Location: index.php');
+            exit;
+        }
+
+        $role = in_array($_POST['role'] ?? '', ['petugas', 'peminjam'], true) ? $_POST['role'] : $target['role'];
+
+        // Akun peminjam: data pribadinya (nama, email, password) mereka input sendiri saat
+        // registrasi, jadi admin cuma boleh ubah role-nya lewat halaman ini — bukan datanya.
+        // Ini mencegah bypass kalau ada yang coba kirim ulang form dengan field yang dikunci di UI.
+        if ($target['role'] === 'peminjam') {
+            $stmt = $db->prepare('UPDATE users SET role = ? WHERE id = ?');
+            $stmt->execute([$role, $id]);
+            setFlash('success', 'Peran pengguna berhasil diperbarui.');
+            header('Location: index.php');
+            exit;
+        }
+
         $nama = trim($_POST['nama'] ?? '');
         $email = trim($_POST['email'] ?? '');
         $password = $_POST['password'] ?? '';
-        $role = in_array($_POST['role'] ?? '', ['admin', 'petugas', 'peminjam'], true) ? $_POST['role'] : 'peminjam';
 
         if ($id <= 0 || $nama === '' || $email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
             setFlash('error', 'Data tidak valid.');
@@ -81,6 +107,15 @@ try {
 
         if ($id === (int) $me['id']) {
             setFlash('error', 'Gak bisa hapus akun sendiri.');
+            header('Location: index.php');
+            exit;
+        }
+
+        $cekTargetHapus = $db->prepare('SELECT role FROM users WHERE id = ?');
+        $cekTargetHapus->execute([$id]);
+        $targetHapus = $cekTargetHapus->fetch();
+        if (!$targetHapus || $targetHapus['role'] === 'admin') {
+            setFlash('error', 'Pengguna tidak ditemukan atau tidak bisa dihapus dari halaman ini.');
             header('Location: index.php');
             exit;
         }

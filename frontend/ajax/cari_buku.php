@@ -1,8 +1,14 @@
 <?php
 header('Content-Type: text/html; charset=utf-8');
 
+require_once __DIR__ . '/../../app/helpers/auth.php';
+mulaiSession();
+applySecurityHeaders();
+
 require_once __DIR__ . '/../database/connection.php';
 require_once __DIR__ . '/../includes/functions.php';
+
+$viewer = currentUser();
 
 $keyword    = trim($_GET['q'] ?? '');
 $kategoriId = isset($_GET['kategori']) ? (int) $_GET['kategori'] : 0;
@@ -52,5 +58,5 @@ if (empty($books)) {
 }
 
 foreach ($books as $book) {
-    echo render_book_card($book);
+    echo render_book_card($book, $viewer);
 }

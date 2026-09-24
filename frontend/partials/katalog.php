@@ -13,7 +13,7 @@
                     <?= render_empty_state('Belum ada buku yang tersedia saat ini.') ?>
                 <?php else: ?>
                     <?php foreach ($books as $book): ?>
-                        <?= render_book_card($book) ?>
+                        <?= render_book_card($book, $me ?? null) ?>
                     <?php endforeach; ?>
                 <?php endif; ?>
             </div>

@@ -4,7 +4,22 @@ require_once __DIR__ . '/../../app/helpers/auth.php';
 
 mulaiSession();
 applySecurityHeaders();
-cekRole(['admin', 'petugas']);
+
+/*
+ * Setiap URL backend hanya boleh dibuka oleh role yang sesuai dengan
+ * foldernya (/backend/admin atau /backend/petugas). Ini mencegah user
+ * petugas membuka URL admin secara manual.
+ */
+$routeRole = null;
+if (preg_match('#/backend/(admin|petugas)(?:/|$)#i', str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? ''), $match)) {
+    $routeRole = strtolower($match[1]);
+}
+
+if ($routeRole !== null) {
+    cekRole([$routeRole]);
+} else {
+    cekRole(['admin', 'petugas']);
+}
 
 $db = (new Database())->connect();
 $me = currentUser();

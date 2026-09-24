@@ -3,7 +3,7 @@
  * Render satu kartu buku (dipakai di beranda & hasil pencarian AJAX)
  * biar tampilannya selalu konsisten di dua tempat itu.
  */
-function render_book_card(array $book): string
+function render_book_card(array $book, ?array $viewer = null): string
 {
     $judul    = htmlspecialchars($book['judul'] ?? 'Tanpa Judul', ENT_QUOTES, 'UTF-8');
     $penulis  = htmlspecialchars($book['penulis'] ?? '-', ENT_QUOTES, 'UTF-8');
@@ -22,6 +22,21 @@ function render_book_card(array $book): string
         $stokBadge = '<span class="stok-badge stok-tersedia">Tersedia · ' . $stokTersedia . '</span>';
     } else {
         $stokBadge = '<span class="stok-badge stok-habis">Stok habis</span>';
+    }
+
+    // Tombol pinjam disesuaikan sama status login:
+    // - belum login  -> diarahkan ke halaman masuk dulu
+    // - login (peminjam) & stok ada -> langsung ke form pengajuan pinjam
+    // - login (peminjam) & stok habis -> tombol nonaktif
+    $bookId = (int) ($book['id'] ?? 0);
+    if ($stokTersedia <= 0) {
+        $borrowButton = '<span class="book-borrow-link book-borrow-disabled">Stok Habis</span>';
+    } elseif ($viewer === null) {
+        $borrowButton = '<a href="login/pages/login.php" class="book-borrow-link">Pinjam</a>';
+    } elseif (($viewer['role'] ?? '') === 'peminjam') {
+        $borrowButton = '<a href="frontend/page/pinjam.php?id=' . $bookId . '" class="book-borrow-link">Pinjam</a>';
+    } else {
+        $borrowButton = '<span class="book-borrow-link book-borrow-disabled" title="Akun staf menggunakan dashboard backend">Staf</span>';
     }
 
     ob_start();
@@ -52,7 +67,7 @@ function render_book_card(array $book): string
                 <p class="book-author">oleh <?= $penulis ?></p>
                 <div class="card-book-footer">
                     <?= $stokBadge ?>
-                    <a href="login/pages/login.php" class="book-borrow-link">Pinjam</a>
+                    <?= $borrowButton ?>
                 </div>
             </div>
         </div>
