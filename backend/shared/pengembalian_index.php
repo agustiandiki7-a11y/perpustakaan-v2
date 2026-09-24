@@ -17,7 +17,7 @@ $stmt = $db->query("
     ORDER BY loans.tanggal_jatuh_tempo ASC
 ");
 $activeLoans = $stmt->fetchAll();
-$today = new DateTime();
+$today = new DateTime('today');
 
 // Riwayat: buku yang sudah pernah dipinjam & sudah kembali (tepat waktu ataupun telat).
 $stmtRiwayat = $db->query("

@@ -45,9 +45,9 @@ function handleCoverUpload(string $rootPath): array
         return [null, 'Format cover harus JPG, JPEG, atau PNG.'];
     }
 
-    if ($fileSize > 2 * 1024 * 1024) {
-        return [null, 'Ukuran cover maksimal 2MB.'];
-    }
+    // Contoh kode lama (biasanya 2MB)
+    if ($_FILES['cover']['size'] > 10 * 1024 * 1024)
+        return [null, 'Ukuran file cover maksimal 10MB!.'];    
 
     $newFileName = 'cover_' . time() . '_' . bin2hex(random_bytes(6)) . '.' . $fileExtension;
     $uploadDir = $rootPath . '/assets/uploads/cover/';

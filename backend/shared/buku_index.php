@@ -43,12 +43,12 @@ $books = $stmt->fetchAll();
             <div class="col-md-3">
                 <label class="form-label">Kode Buku</label>
                 <input type="text" name="kode_buku" class="form-control" required
-                       value="<?= htmlspecialchars($editData['kode_buku'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
+                    value="<?= htmlspecialchars($editData['kode_buku'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
             </div>
             <div class="col-md-4">
                 <label class="form-label">Judul</label>
                 <input type="text" name="judul" class="form-control" required
-                       value="<?= htmlspecialchars($editData['judul'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
+                    value="<?= htmlspecialchars($editData['judul'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
             </div>
             <div class="col-md-5">
                 <label class="form-label">Kategori</label>
@@ -65,23 +65,23 @@ $books = $stmt->fetchAll();
             <div class="col-md-4">
                 <label class="form-label">Penulis</label>
                 <input type="text" name="penulis" class="form-control" required
-                       value="<?= htmlspecialchars($editData['penulis'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
+                    value="<?= htmlspecialchars($editData['penulis'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
             </div>
             <div class="col-md-4">
                 <label class="form-label">Penerbit</label>
                 <input type="text" name="penerbit" class="form-control"
-                       value="<?= htmlspecialchars($editData['penerbit'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
+                    value="<?= htmlspecialchars($editData['penerbit'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
             </div>
             <div class="col-md-4">
                 <label class="form-label">Tahun Terbit</label>
                 <input type="number" name="tahun_terbit" class="form-control" min="1900" max="2100"
-                       value="<?= htmlspecialchars($editData['tahun_terbit'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
+                    value="<?= htmlspecialchars($editData['tahun_terbit'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
             </div>
 
             <div class="col-md-3">
                 <label class="form-label">Jumlah Stok</label>
                 <input type="number" name="jumlah_stok" class="form-control" min="0" required
-                       value="<?= htmlspecialchars($editData['jumlah_stok'] ?? '0', ENT_QUOTES, 'UTF-8') ?>">
+                    value="<?= htmlspecialchars($editData['jumlah_stok'] ?? '0', ENT_QUOTES, 'UTF-8') ?>">
                 <?php if ($editData): ?>
                     <p class="form-hint">Stok tersedia saat ini: <?= (int) $editData['stok_tersedia'] ?></p>
                 <?php endif; ?>
@@ -94,7 +94,7 @@ $books = $stmt->fetchAll();
                 </select>
             </div>
             <div class="col-md-6">
-                <label class="form-label">Cover (JPG/PNG, maks 2MB)</label>
+                <label class="form-label">Cover (JPG/PNG, maks 10MB)</label>
                 <input type="file" name="cover" class="form-control" accept=".jpg,.jpeg,.png">
                 <?php if (!empty($editData['cover'])): ?>
                     <p class="form-hint">File saat ini: <?= htmlspecialchars(basename($editData['cover']), ENT_QUOTES, 'UTF-8') ?> (biarkan kosong kalau gak mau ganti)</p>
@@ -121,11 +121,21 @@ $books = $stmt->fetchAll();
     <div class="table-wrap">
         <table class="data-table">
             <thead>
-                <tr><th>Kode</th><th>Judul</th><th>Kategori</th><th>Penulis</th><th>Stok</th><th>Status</th><th>Aksi</th></tr>
+                <tr>
+                    <th>Kode</th>
+                    <th>Judul</th>
+                    <th>Kategori</th>
+                    <th>Penulis</th>
+                    <th>Stok</th>
+                    <th>Status</th>
+                    <th>Aksi</th>
+                </tr>
             </thead>
             <tbody>
                 <?php if (empty($books)): ?>
-                    <tr><td colspan="7" class="text-center text-muted py-4">Belum ada buku.</td></tr>
+                    <tr>
+                        <td colspan="7" class="text-center text-muted py-4">Belum ada buku.</td>
+                    </tr>
                 <?php else: ?>
                     <?php foreach ($books as $book): ?>
                         <tr>

@@ -21,6 +21,9 @@
         <a href="<?= $backendBase ?>/pengembalian/index.php" class="sidebar-link <?= $current === 'pengembalian' ? 'active' : '' ?>">
             <i class="fas fa-rotate-left"></i> Pengembalian
         </a>
+        <a href="<?= $backendBase ?>/laporan/index.php" class="sidebar-link <?= $current === 'laporan' ? 'active' : '' ?>">
+            <i class="fas fa-file-lines"></i> Laporan
+        </a>
         <?php if (($me['role'] ?? '') === 'admin'): ?>
             <a href="<?= $backendBase ?>/pengguna/index.php" class="sidebar-link <?= $current === 'pengguna' ? 'active' : '' ?>">
                 <i class="fas fa-users"></i> Pengguna
@@ -32,7 +35,7 @@
         <a href="<?= baseUrlPath() ?>/index.php" class="sidebar-link">
             <i class="fas fa-house"></i> Lihat Situs
         </a>
-        <a href="<?= baseUrlPath() ?>/backend/logout.php" class="sidebar-link sidebar-logout">
+        <a href="<?= baseUrlPath() ?>/backend/logout.php" class="sidebar-link sidebar-logout logout-confirm">
             <i class="fas fa-right-from-bracket"></i> Keluar
         </a>
     </div>

@@ -31,78 +31,49 @@ $expired = isset($_GET['expired']);
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <style>
-    :root {
-        --color-bg: #F2F6FC; --color-surface: #FFFFFF; --color-ink: #12202E;
-        --color-ink-soft: #5B6B7C; --color-primary: #0B4F9C; --color-primary-dark: #073868;
-        --color-accent: #1E9BE0; --color-border: #DCE6F0;
-    }
-    * { box-sizing: border-box; }
-    body {
-        margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
-        font-family: 'Inter', sans-serif; background: var(--color-bg); color: var(--color-ink); padding: 1.5rem;
-    }
-    .login-card {
-        background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 16px;
-        padding: 2.5rem 2.25rem; width: 100%; max-width: 400px; box-shadow: 0 20px 45px -30px rgba(11,79,156,0.35);
-    }
-    .login-brand { font-family: 'Poppins', sans-serif; font-weight: 700; font-size: 1.35rem; color: var(--color-primary); margin-bottom: 0.3rem; text-align: center; }
-    .login-brand i { margin-right: 0.4rem; color: var(--color-accent); }
-    .login-sub { text-align: center; color: var(--color-ink-soft); font-size: 0.9rem; margin-bottom: 1.75rem; }
-    .form-group { margin-bottom: 1.1rem; }
-    label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.4rem; }
-    input[type=text], input[type=password] {
-        width: 100%; padding: 0.65rem 0.9rem; border: 1.5px solid var(--color-border); border-radius: 8px;
-        font-size: 0.95rem; font-family: inherit; background: var(--color-bg);
-    }
-    input:focus { outline: none; border-color: var(--color-primary); }
-    .btn-login {
-        width: 100%; background: var(--color-primary); color: #fff; border: none; border-radius: 8px;
-        padding: 0.75rem; font-weight: 600; font-size: 0.95rem; cursor: pointer; margin-top: 0.5rem;
-    }
-    .btn-login:hover { background: var(--color-primary-dark); }
-    .alert { border-radius: 8px; padding: 0.75rem 1rem; font-size: 0.88rem; margin-bottom: 1.25rem; }
-    .alert-error { background: #FBE7E5; color: #A23B2E; }
-    .alert-success { background: #E3F0FB; color: var(--color-primary); }
-    .back-link { display: block; text-align: center; margin-top: 1.5rem; font-size: 0.85rem; color: var(--color-ink-soft); text-decoration: none; }
-    .back-link:hover { color: var(--color-primary); }
-    .register-link { display: block; text-align: center; margin-top: 0.9rem; font-size: 0.87rem; color: var(--color-ink-soft); }
-    .register-link a { color: var(--color-primary); font-weight: 600; text-decoration: none; }
-    .register-link a:hover { text-decoration: underline; }
+:root{--green:#2f5d50;--green-dark:#23483e;--cream:#f6f2e9;--paper:#fffdf8;--line:#ded8ca;--text:#29352f;--muted:#69736d;--brown:#b4773f}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;font-family:Inter,Arial,sans-serif;background:var(--cream);color:var(--text);display:flex;align-items:center;justify-content:center;padding:24px}
+.login-wrap{width:min(920px,100%);display:grid;grid-template-columns:1.05fr .95fr;background:var(--paper);border:1px solid var(--line);box-shadow:0 14px 40px rgba(54,47,35,.09);border-radius:12px;overflow:hidden}
+.login-intro{background:#263f37;color:#fff;padding:42px 38px;display:flex;flex-direction:column;justify-content:center}.brand-mark{display:flex;align-items:center;gap:10px;font-weight:700;font-size:1.15rem;margin-bottom:44px}.brand-mark i{color:#e1b27b}.intro-label{color:#e1b27b;text-transform:uppercase;letter-spacing:.08em;font-size:.74rem;font-weight:700;margin:0 0 8px}.login-intro h1{font-family:Poppins,Arial,sans-serif;font-size:2rem;line-height:1.25;margin:0 0 12px}.login-intro p{color:#d2ddd7;line-height:1.7;font-size:.92rem;max-width:34rem}.intro-note{margin-top:30px;padding-top:18px;border-top:1px solid rgba(255,255,255,.12);font-size:.82rem;color:#b9c9c1}
+.login-card{padding:42px 38px;background:var(--paper)}.login-title{font-family:Poppins,Arial,sans-serif;font-size:1.45rem;margin:0 0 5px}.login-sub{text-align:left;color:var(--muted);font-size:.88rem;margin:0 0 25px}.form-group{margin-bottom:16px}label{display:block;font-size:.84rem;font-weight:600;margin-bottom:7px}.input-wrap{position:relative}.input-wrap i{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#89948e;font-size:.9rem}.input-wrap input{padding-left:38px!important}input[type=text],input[type=password]{width:100%;padding:11px 12px;border:1px solid #d6d0c3;border-radius:7px;font:inherit;font-size:.9rem;background:#fff}.input-wrap input:focus{outline:none;border-color:#7b9a8d;box-shadow:0 0 0 3px rgba(47,93,80,.08)}.btn-login{width:100%;background:var(--green);color:#fff;border:0;border-radius:7px;padding:11px;font-weight:600;font-size:.9rem;cursor:pointer;margin-top:5px}.btn-login:hover{background:var(--green-dark)}.alert{border-radius:7px;padding:10px 12px;font-size:.84rem;margin-bottom:15px}.alert-error{background:#fbefeb;color:#9a4b37;border:1px solid #efd5cc}.alert-success{background:#edf5ef;color:var(--green);border:1px solid #d3e5d7}.register-link,.back-link{font-size:.83rem;text-align:center;color:var(--muted)}.register-link{margin:18px 0 8px}.register-link a{color:var(--green);font-weight:600;text-decoration:none}.back-link{display:block;text-decoration:none;margin-top:8px}.back-link:hover{color:var(--green)}
+@media(max-width:720px){.login-wrap{grid-template-columns:1fr}.login-intro{padding:28px}.login-intro h1{font-size:1.55rem}.brand-mark{margin-bottom:25px}.intro-note{display:none}.login-card{padding:30px 24px}}
 </style>
 </head>
 <body>
-    <div class="login-card">
-        <p class="login-brand"><i class="fas fa-book-open"></i>Perpustakaan Digital</p>
-        <p class="login-sub">Masuk buat mengelola atau meminjam buku</p>
-
+<div class="login-wrap">
+    <section class="login-intro">
+        <div class="brand-mark"><i class="fas fa-book-open"></i><span>Perpustakaan Digital</span></div>
+        <p class="intro-label">Ruang baca digital</p>
+        <h1>Kelola buku dan peminjaman dengan lebih mudah.</h1>
+        <p>Masuk untuk mengelola koleksi, mencatat peminjaman, pengembalian, dan melihat laporan sesuai hak akses akun.</p>
+        <p class="intro-note"><i class="fas fa-lock me-1"></i> Akses halaman menyesuaikan peran administrator, petugas, atau peminjam.</p>
+    </section>
+    <section class="login-card">
+        <h2 class="login-title">Masuk ke akun</h2>
+        <p class="login-sub">Gunakan username dan password yang sudah terdaftar.</p>
         <?php if ($expired): ?>
             <div class="alert alert-error">Sesi kamu habis, silakan masuk lagi.</div>
         <?php endif; ?>
-
         <?php if ($flash): ?>
             <div class="alert alert-<?= $flash['type'] === 'success' ? 'success' : 'error' ?>">
                 <?= htmlspecialchars($flash['message'], ENT_QUOTES, 'UTF-8') ?>
             </div>
         <?php endif; ?>
-
         <form action="../function/proses_login.php" method="POST" autocomplete="off">
             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') ?>">
-
             <div class="form-group">
                 <label for="username">Username</label>
-                <input type="text" id="username" name="username" required autofocus maxlength="50">
+                <div class="input-wrap"><i class="fas fa-user"></i><input type="text" id="username" name="username" required autofocus maxlength="50"></div>
             </div>
-
             <div class="form-group">
                 <label for="password">Password</label>
-                <input type="password" id="password" name="password" required maxlength="255">
+                <div class="input-wrap"><i class="fas fa-lock"></i><input type="password" id="password" name="password" required maxlength="255"></div>
             </div>
-
-            <button type="submit" class="btn-login">Masuk</button>
+            <button type="submit" class="btn-login"><i class="fas fa-right-to-bracket me-1"></i> Masuk</button>
         </form>
-
         <p class="register-link">Belum punya akun peminjam? <a href="register.php">Daftar di sini</a></p>
         <a href="../../index.php" class="back-link"><i class="fas fa-arrow-left me-1"></i> Kembali ke beranda</a>
-    </div>
+    </section>
+</div>
 </body>
 </html>

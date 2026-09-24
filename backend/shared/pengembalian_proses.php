@@ -45,7 +45,7 @@ try {
         exit;
     }
 
-    $today = new DateTime();
+    $today = new DateTime('today');
     $jatuhTempo = new DateTime($loan['tanggal_jatuh_tempo']);
     $telat = $today > $jatuhTempo;
     $hariTelat = $telat ? $today->diff($jatuhTempo)->days : 0;
@@ -72,7 +72,7 @@ try {
     } else {
         setFlash('success', 'Buku berhasil dikembalikan tepat waktu.');
     }
-} catch (PDOException $e) {
+} catch (Throwable $e) {
     if ($db->inTransaction()) {
         $db->rollBack();
     }

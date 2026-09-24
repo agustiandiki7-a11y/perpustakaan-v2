@@ -67,6 +67,8 @@ $today = new DateTime();
     .badge-dipinjam { background: #E3F0FB; color: var(--color-primary); }
     .badge-dikembalikan { background: #E4F5E9; color: #1B7A3D; }
     .badge-terlambat { background: #FBE7E5; color: #A23B2E; }
+    .badge-menunggu { background: #FFF8E6; color: #8A6100; }
+    .badge-ditolak { background: #FBE7E5; color: #A23B2E; }
     .empty { text-align: center; color: var(--color-ink-soft); padding: 2rem 0; }
 </style>
 </head>
@@ -95,19 +97,29 @@ $today = new DateTime();
                     <?php foreach ($loans as $loan): ?>
                         <?php
                         $status = $loan['status'];
-                        $isTelatBelumKembali = $status === 'dipinjam' && new DateTime($loan['tanggal_jatuh_tempo']) < $today;
+                        $isTelatBelumKembali = $status === 'dipinjam'
+                            && !empty($loan['tanggal_jatuh_tempo'])
+                            && new DateTime($loan['tanggal_jatuh_tempo']) < $today;
+                        $statusLabel = match ($status) {
+                            'menunggu' => 'Menunggu Konfirmasi',
+                            'ditolak' => 'Ditolak',
+                            'dipinjam' => 'Dipinjam',
+                            'dikembalikan' => 'Dikembalikan',
+                            'terlambat' => 'Terlambat',
+                            default => ucfirst($status),
+                        };
                         ?>
                         <tr>
                             <td><?= htmlspecialchars($loan['kode_peminjaman'], ENT_QUOTES, 'UTF-8') ?></td>
                             <td><?= htmlspecialchars($loan['judul_buku'] ?? '-', ENT_QUOTES, 'UTF-8') ?></td>
-                            <td><?= htmlspecialchars($loan['tanggal_pinjam'], ENT_QUOTES, 'UTF-8') ?></td>
-                            <td><?= htmlspecialchars($loan['tanggal_jatuh_tempo'], ENT_QUOTES, 'UTF-8') ?></td>
+                            <td><?= htmlspecialchars($loan['tanggal_pinjam'] ?? '-', ENT_QUOTES, 'UTF-8') ?></td>
+                            <td><?= htmlspecialchars($loan['tanggal_jatuh_tempo'] ?? '-', ENT_QUOTES, 'UTF-8') ?></td>
                             <td><?= htmlspecialchars($loan['tanggal_kembali'] ?? '-', ENT_QUOTES, 'UTF-8') ?></td>
                             <td>
                                 <?php if ($isTelatBelumKembali): ?>
                                     <span class="badge badge-terlambat">Belum dikembalikan (lewat tenggat)</span>
                                 <?php else: ?>
-                                    <span class="badge badge-<?= htmlspecialchars($status, ENT_QUOTES, 'UTF-8') ?>"><?= ucfirst(htmlspecialchars($status, ENT_QUOTES, 'UTF-8')) ?></span>
+                                    <span class="badge badge-<?= htmlspecialchars($status, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($statusLabel, ENT_QUOTES, 'UTF-8') ?></span>
                                 <?php endif; ?>
                             </td>
                         </tr>

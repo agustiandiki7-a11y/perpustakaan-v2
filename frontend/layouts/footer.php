@@ -24,3 +24,25 @@
             <p class="footer-copy">&copy; <?= date('Y') ?> Sistem Informasi Perpustakaan Digital.</p>
         </div>
     </footer>
+
+<div class="site-logout-modal" id="siteLogoutModal" aria-hidden="true">
+    <div class="site-logout-dialog" role="dialog" aria-modal="true" aria-labelledby="siteLogoutTitle">
+        <div class="site-logout-icon"><i class="fas fa-right-from-bracket"></i></div>
+        <h2 id="siteLogoutTitle">Keluar dari akun?</h2>
+        <p>Kamu akan kembali ke halaman login.</p>
+        <div class="site-logout-actions">
+            <button type="button" class="btn-site-cancel" data-site-logout-cancel>Batal</button>
+            <a href="backend/logout.php" class="btn-site-logout">Ya, Keluar</a>
+        </div>
+    </div>
+</div>
+<script>
+(function(){
+ const modal=document.getElementById('siteLogoutModal'); if(!modal)return;
+ const links=document.querySelectorAll('.btn-nav-logout'); const cancel=modal.querySelector('[data-site-logout-cancel]');
+ links.forEach(link=>link.addEventListener('click',function(e){e.preventDefault();modal.classList.add('show');modal.setAttribute('aria-hidden','false');cancel.focus();}));
+ cancel.addEventListener('click',()=>{modal.classList.remove('show');modal.setAttribute('aria-hidden','true');});
+ modal.addEventListener('click',e=>{if(e.target===modal)cancel.click();});
+ document.addEventListener('keydown',e=>{if(e.key==='Escape')cancel.click();});
+})();
+</script>

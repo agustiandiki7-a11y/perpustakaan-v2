@@ -18,6 +18,20 @@ $stmtRecent = $db->query("
 $recentLoans = $stmtRecent ? $stmtRecent->fetchAll() : [];
 ?>
 
+<section class="dashboard-welcome">
+    <h2>Selamat datang, <?= htmlspecialchars($me['nama'] ?: $me['username'], ENT_QUOTES, 'UTF-8') ?>.</h2>
+    <p>Kelola koleksi dan aktivitas perpustakaan dari satu halaman. Kamu masuk sebagai <strong><?= htmlspecialchars(ucfirst($me['role']), ENT_QUOTES, 'UTF-8') ?></strong>.</p>
+    <div class="quick-actions">
+        <a class="quick-action" href="<?= $backendBase ?>/buku/index.php"><i class="fas fa-book"></i> Kelola Buku</a>
+        <a class="quick-action" href="<?= $backendBase ?>/peminjaman/index.php"><i class="fas fa-arrow-right-arrow-left"></i> Peminjaman</a>
+        <a class="quick-action" href="<?= $backendBase ?>/pengembalian/index.php"><i class="fas fa-rotate-left"></i> Pengembalian</a>
+        <a class="quick-action" href="<?= $backendBase ?>/laporan/index.php"><i class="fas fa-file-lines"></i> Laporan</a>
+        <?php if (($me['role'] ?? '') === 'admin'): ?>
+            <a class="quick-action" href="<?= $backendBase ?>/pengguna/index.php"><i class="fas fa-users"></i> Pengguna</a>
+        <?php endif; ?>
+    </div>
+</section>
+
 <div class="row g-3 mb-4">
     <div class="col-6 col-lg-3">
         <div class="stat-card">

@@ -1,7 +1,8 @@
 <?php
-$pageTitle = 'Pengguna';
+$pageTitle = 'Manajemen Pengguna';
 require_once __DIR__ . '/../layouts/header.php';
-cekRole(['admin']); // khusus admin, walaupun header udah cek admin+petugas
+cekRole(['admin']); // khusus admin
+
 require_once __DIR__ . '/../layouts/sidebar.php';
 
 $editData = null;
@@ -11,14 +12,14 @@ if (isset($_GET['edit'])) {
     $editData = $stmt->fetch() ?: null;
 }
 
-// Akun admin sengaja gak ditampilkan di sini — halaman ini buat ngelola staf & anggota,
-// bukan akun admin lain. Kalau memang perlu, akun admin diatur langsung lewat database.
+// Mengambil daftar pengguna selain admin
 $users = $db->query("SELECT id, nama, username, email, role, created_at FROM users WHERE role != 'admin' ORDER BY FIELD(role, 'petugas', 'peminjam'), id DESC")->fetchAll();
 
 $isEditPeminjam = $editData && $editData['role'] === 'peminjam';
+$currentUserId = $_SESSION['user_id'] ?? ($_SESSION['id'] ?? 0);
 ?>
 
-<div class="panel mb-4">
+<div class="panel mb-3">
     <div class="panel-heading">
         <h2><?= $editData ? 'Edit Pengguna' : 'Tambah Pengguna' ?></h2>
     </div>
@@ -32,16 +33,16 @@ $isEditPeminjam = $editData && $editData['role'] === 'peminjam';
         <?php endif; ?>
 
         <?php if ($isEditPeminjam): ?>
-            <div class="alert-flash alert-error" style="margin-bottom:1rem;">
+            <div class="alert-flash alert-error" style="margin-bottom:0.75rem;">
                 <i class="fas fa-circle-info"></i>
                 Data pribadi (nama, username, email, password) akun peminjam dikunci dari halaman admin.
                 Data itu milik &amp; diinput sendiri oleh peminjam saat daftar, jadi admin cuma bisa
                 mengubah <strong>peran</strong> (mis. mempromosikan jadi petugas) atau menghapus akunnya.
-                Kalau peminjam perlu ubah data pribadinya, arahkan dia login sendiri (fitur ubah profil bisa
-                ditambahkan menyusul) — ini buat jaga integritas data yang mereka input sendiri.
             </div>
         <?php endif; ?>
-        <div class="row g-3">
+
+        <!-- Menggunakan g-2 agar jarak antar kolom lebih rapat -->
+        <div class="row g-2">
             <div class="col-md-3">
                 <label class="form-label">Nama</label>
                 <input type="text" name="nama" class="form-control" required <?= $isEditPeminjam ? 'readonly' : '' ?>
@@ -64,9 +65,9 @@ $isEditPeminjam = $editData && $editData['role'] === 'peminjam';
                         <option value="<?= $r ?>" <?= ($editData['role'] ?? 'peminjam') === $r ? 'selected' : '' ?>><?= ucfirst($r) ?></option>
                     <?php endforeach; ?>
                 </select>
-                <p class="form-hint">Akun admin gak dikelola dari sini.</p>
+                <p class="form-hint mb-0">Akun admin gak dikelola dari sini.</p>
             </div>
-            <div class="col-md-6">
+            <div class="col-md-6 mt-2">
                 <label class="form-label">
                     Password <?= $editData ? '(kosongkan kalau gak ganti)' : '' ?>
                     <?= $isEditPeminjam ? '— dikunci untuk akun peminjam' : '' ?>
@@ -89,7 +90,16 @@ $isEditPeminjam = $editData && $editData['role'] === 'peminjam';
     <div class="panel-heading"><h2>Daftar Pengguna (<?= count($users) ?>)</h2></div>
     <div class="table-wrap">
         <table class="data-table">
-            <thead><tr><th>Nama</th><th>Username</th><th>Email</th><th>Role</th><th>Terdaftar</th><th>Aksi</th></tr></thead>
+            <thead>
+                <tr>
+                    <th>Nama</th>
+                    <th>Username</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Terdaftar</th>
+                    <th>Aksi</th>
+                </tr>
+            </thead>
             <tbody>
                 <?php if (empty($users)): ?>
                     <tr><td colspan="6" class="text-center text-muted py-4">Belum ada pengguna.</td></tr>
@@ -103,7 +113,7 @@ $isEditPeminjam = $editData && $editData['role'] === 'peminjam';
                             <td><?= htmlspecialchars($u['created_at'] ?? '-', ENT_QUOTES, 'UTF-8') ?></td>
                             <td>
                                 <a href="index.php?edit=<?= (int) $u['id'] ?>" class="btn-outline"><i class="fas fa-pen"></i></a>
-                                <?php if ((int) $u['id'] !== (int) $me['id']): ?>
+                                <?php if ((int) $u['id'] !== (int) $currentUserId): ?>
                                     <form action="proses.php" method="POST" style="display:inline" onsubmit="return confirm('Hapus pengguna ini?');">
                                         <?= csrfField() ?>
                                         <input type="hidden" name="action" value="delete">
