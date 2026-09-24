@@ -1,4 +1,5 @@
 <?php
+
 require_once __DIR__ . '/../../app/config/Database.php';
 require_once __DIR__ . '/../../app/helpers/auth.php';
 
@@ -20,6 +21,7 @@ if (($me['role'] ?? '') !== 'peminjam') {
 }
 
 $db = (new Database())->connect();
+
 $bookId = (int) ($_GET['id'] ?? 0);
 
 if ($bookId <= 0) {
@@ -28,1184 +30,1035 @@ if ($bookId <= 0) {
     exit;
 }
 
+/*
+|--------------------------------------------------------------------------
+| Ambil data buku
+|--------------------------------------------------------------------------
+*/
+
 $stmt = $db->prepare("
-    SELECT books.*, categories.nama_kategori
+    SELECT
+        books.*,
+        categories.nama_kategori
     FROM books
-    LEFT JOIN categories ON categories.id = books.category_id
-    WHERE books.id = ? AND books.status = 'aktif'
+    LEFT JOIN categories
+        ON categories.id = books.category_id
+    WHERE books.id = ?
+      AND books.status = 'aktif'
+    LIMIT 1
 ");
+
 $stmt->execute([$bookId]);
-$book = $stmt->fetch();
+
+$book = $stmt->fetch(PDO::FETCH_ASSOC);
 
 if (!$book) {
-    setFlash('error', 'Buku tidak ditemukan atau sudah tidak aktif.');
+    setFlash(
+        'error',
+        'Buku tidak ditemukan atau sudah tidak aktif.'
+    );
+
     header('Location: ../../index.php');
     exit;
 }
 
 $stokTersedia = (int) $book['stok_tersedia'];
-$flash = getFlash();
-$csrfToken = csrfToken();
 
-$tanggalPinjam = date('Y-m-d');
-$tanggalKembali = date('Y-m-d', strtotime('+7 days'));
+$flash = getFlash();
+
+$tanggalPengajuan = date('Y-m-d');
+$tanggalJatuhTempo = date(
+    'Y-m-d',
+    strtotime('+7 days')
+);
+
 ?>
 <!DOCTYPE html>
 <html lang="id">
-
 <head>
+
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <title>Ajukan Peminjaman - Perpustakaan Digital</title>
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
 
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <title>
+        Ajukan Peminjaman - Perpustakaan Digital
+    </title>
+
+    <link
+        rel="preconnect"
+        href="https://fonts.googleapis.com"
+    >
 
     <link
         href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@600;700&display=swap"
-        rel="stylesheet">
+        rel="stylesheet"
+    >
 
     <link
         rel="stylesheet"
-        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
-<style>
-:root {
-    --primary: #198754;
-    --primary-dark: #146c43;
-    --primary-light: #EAF6EF;
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
+    >
 
-    --sidebar: #173B2C;
-    --sidebar-dark: #102D21;
+    <style>
 
-    --bg: #F5F7F6;
-    --white: #FFFFFF;
+        :root {
+            --green: #198754;
+            --green-dark: #146c43;
+            --green-soft: #eaf7ef;
+            --green-light: #f3fbf6;
 
-    --text: #202A25;
-    --text-soft: #718078;
+            --text: #17221b;
+            --muted: #6c757d;
 
-    --border: #E1E8E4;
+            --bg: #f5f7f6;
+            --white: #ffffff;
 
-    --success: #198754;
-    --success-bg: #EAF6EF;
+            --border: #e3e9e5;
 
-    --danger: #D9534F;
-    --danger-bg: #FFF0EF;
+            --danger: #dc3545;
+            --danger-soft: #fff0f1;
 
-    --shadow: 0 8px 25px rgba(23, 59, 44, 0.06);
+            --shadow:
+                0 18px 50px rgba(25, 135, 84, 0.10);
+        }
 
-    --radius: 14px;
-}
+        * {
+            box-sizing: border-box;
+        }
 
-/* =========================
-   RESET
-========================= */
+        body {
+            margin: 0;
+            min-height: 100vh;
 
-* {
-    box-sizing: border-box;
-}
+            font-family: 'Inter', sans-serif;
 
-html {
-    scroll-behavior: smooth;
-}
+            color: var(--text);
 
-body {
-    margin: 0;
-    min-height: 100vh;
+            background:
+                radial-gradient(
+                    circle at top right,
+                    rgba(25, 135, 84, 0.08),
+                    transparent 35%
+                ),
+                var(--bg);
+        }
 
-    font-family: 'Inter', sans-serif;
+        a {
+            text-decoration: none;
+        }
 
-    background: var(--bg);
-    color: var(--text);
-}
+        .page {
+            width: 100%;
+            max-width: 760px;
 
-/* =========================
-   TOPBAR
-========================= */
+            margin: 0 auto;
 
-.topbar {
-    height: 68px;
+            padding:
+                35px 20px
+                60px;
+        }
 
-    display: flex;
-    align-items: center;
+        /*
+        |--------------------------------------------------------------------------
+        | Back
+        |--------------------------------------------------------------------------
+        */
 
-    background: var(--white);
+        .back-link {
+            display: inline-flex;
 
-    border-bottom: 1px solid var(--border);
+            align-items: center;
 
-    color: var(--text);
-}
+            gap: 9px;
 
-.topbar-inner {
-    width: min(1100px, calc(100% - 40px));
+            color: var(--muted);
 
-    margin: 0 auto;
+            font-size: 14px;
 
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-}
+            font-weight: 600;
 
-/* =========================
-   BRAND
-========================= */
+            margin-bottom: 20px;
 
-.brand {
-    display: flex;
-    align-items: center;
-    gap: 11px;
+            transition: 0.2s;
+        }
 
-    color: var(--text);
-    text-decoration: none;
-}
+        .back-link:hover {
+            color: var(--green);
+        }
 
-.brand-icon {
-    width: 38px;
-    height: 38px;
+        /*
+        |--------------------------------------------------------------------------
+        | Main Card
+        |--------------------------------------------------------------------------
+        */
 
-    display: flex;
-    align-items: center;
-    justify-content: center;
+        .card {
+            background: var(--white);
 
-    border-radius: 10px;
+            border:
+                1px solid var(--border);
 
-    background: var(--primary-light);
-    color: var(--primary);
+            border-radius: 20px;
 
-    font-size: 17px;
-}
+            box-shadow: var(--shadow);
 
-.brand-name {
-    font-family: 'Poppins', sans-serif;
+            overflow: hidden;
+        }
 
-    font-size: 17px;
-    font-weight: 700;
+        /*
+        |--------------------------------------------------------------------------
+        | Header
+        |--------------------------------------------------------------------------
+        */
 
-    color: var(--text);
-}
+        .card-header {
+            padding: 28px 30px 24px;
 
-/* =========================
-   USER INFO
-========================= */
+            border-bottom:
+                1px solid var(--border);
+        }
 
-.user-info {
-    display: flex;
-    align-items: center;
-    gap: 9px;
+        .header-icon {
+            width: 48px;
+            height: 48px;
 
-    color: var(--text-soft);
+            display: flex;
 
-    font-size: 13px;
-    font-weight: 500;
-}
+            align-items: center;
+            justify-content: center;
 
-.user-icon {
-    width: 32px;
-    height: 32px;
+            background: var(--green-soft);
 
-    display: flex;
-    align-items: center;
-    justify-content: center;
+            color: var(--green);
 
-    border-radius: 50%;
+            border-radius: 13px;
 
-    background: var(--primary-light);
-    color: var(--primary);
+            font-size: 20px;
 
-    font-size: 13px;
-}
+            margin-bottom: 15px;
+        }
 
-/* =========================
-   PAGE
-========================= */
+        .card-header h1 {
+            margin: 0 0 7px;
 
-.page {
-    width: min(900px, calc(100% - 40px));
+            font-family: 'Poppins', sans-serif;
 
-    margin: 0 auto;
+            font-size: 23px;
 
-    padding: 35px 0 50px;
-}
+            line-height: 1.35;
+        }
 
-/* =========================
-   BACK LINK
-========================= */
+        .card-header p {
+            margin: 0;
 
-.back-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
+            color: var(--muted);
 
-    margin-bottom: 20px;
+            font-size: 14px;
 
-    color: var(--text-soft);
+            line-height: 1.6;
+        }
 
-    text-decoration: none;
+        /*
+        |--------------------------------------------------------------------------
+        | Book
+        |--------------------------------------------------------------------------
+        */
 
-    font-size: 14px;
-    font-weight: 500;
+        .book-box {
+            margin: 25px 30px;
 
-    transition: color 0.2s ease;
-}
+            padding: 20px;
 
-.back-link:hover {
-    color: var(--primary);
-}
+            display: flex;
 
-.back-link i {
-    font-size: 13px;
-}
+            gap: 17px;
 
-/* =========================
-   MAIN CARD
-========================= */
+            background: var(--green-light);
 
-.card {
-    overflow: hidden;
+            border:
+                1px solid #dcefe3;
 
-    background: var(--white);
+            border-radius: 15px;
+        }
 
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
+        .book-icon {
+            flex: 0 0 55px;
 
-    box-shadow: var(--shadow);
-}
+            width: 55px;
+            height: 68px;
 
-/* =========================
-   CARD HEADER
-========================= */
+            display: flex;
 
-.card-header {
-    padding: 25px 28px;
+            align-items: center;
+            justify-content: center;
 
-    border-bottom: 1px solid var(--border);
-}
+            background: var(--green);
 
-.page-title {
-    display: flex;
-    align-items: center;
-    gap: 13px;
+            color: white;
 
-    margin: 0;
+            border-radius: 9px;
 
-    color: var(--text);
+            font-size: 23px;
 
-    font-family: 'Poppins', sans-serif;
+            box-shadow:
+                0 8px 20px
+                rgba(25, 135, 84, 0.18);
+        }
 
-    font-size: 22px;
-    font-weight: 700;
-}
+        .book-info {
+            min-width: 0;
+        }
 
-.title-icon {
-    width: 42px;
-    height: 42px;
+        .book-title {
+            margin: 0 0 6px;
 
-    display: flex;
-    align-items: center;
-    justify-content: center;
+            font-size: 17px;
 
-    border-radius: 10px;
+            font-weight: 700;
 
-    background: var(--primary-light);
-    color: var(--primary);
+            line-height: 1.4;
+        }
 
-    font-size: 18px;
-}
+        .book-author {
+            margin: 0 0 10px;
 
-.subtitle {
-    margin: 8px 0 0 55px;
+            color: var(--muted);
 
-    color: var(--text-soft);
+            font-size: 13px;
+        }
 
-    font-size: 13px;
-    line-height: 1.6;
-}
+        .book-details {
+            display: flex;
 
-/* =========================
-   CARD BODY
-========================= */
+            flex-wrap: wrap;
 
-.card-body {
-    padding: 28px;
-}
+            gap: 7px;
+        }
 
-/* =========================
-   BOOK INFORMATION
-========================= */
+        .book-badge {
+            display: inline-flex;
 
-.book-box {
-    display: flex;
-    align-items: flex-start;
-    gap: 17px;
+            align-items: center;
 
-    padding: 18px;
+            gap: 5px;
 
-    margin-bottom: 24px;
+            padding: 6px 9px;
 
-    background: #FAFAFD;
+            border-radius: 7px;
 
-    border: 1px solid var(--border);
-    border-radius: 12px;
-}
+            background: white;
 
-.book-icon {
-    flex: 0 0 48px;
+            border:
+                1px solid #dce9e1;
 
-    width: 48px;
-    height: 58px;
+            color: #526057;
 
-    display: flex;
-    align-items: center;
-    justify-content: center;
+            font-size: 11px;
 
-    border-radius: 8px;
+            font-weight: 600;
+        }
 
-    background: var(--sidebar);
-    color: #FFFFFF;
+        .book-badge.stock {
+            color: var(--green);
+        }
 
-    font-size: 19px;
-}
+        /*
+        |--------------------------------------------------------------------------
+        | Alert
+        |--------------------------------------------------------------------------
+        */
 
-.book-content {
-    min-width: 0;
-}
+        .alert {
+            margin:
+                0 30px
+                20px;
 
-.book-title {
-    margin: 0 0 5px;
+            padding: 13px 15px;
 
-    color: var(--text);
+            border-radius: 10px;
 
-    font-family: 'Poppins', sans-serif;
+            font-size: 13px;
 
-    font-size: 17px;
-    font-weight: 700;
+            line-height: 1.5;
+        }
 
-    line-height: 1.4;
-}
+        .alert-error {
+            color: #a52834;
 
-.book-author {
-    margin: 0 0 10px;
+            background: var(--danger-soft);
 
-    color: var(--text-soft);
+            border:
+                1px solid #f3c9ce;
+        }
 
-    font-size: 13px;
-}
+        .alert-success {
+            color: var(--green-dark);
 
-.book-details {
-    display: flex;
-    flex-wrap: wrap;
+            background: var(--green-soft);
 
-    gap: 8px;
-}
+            border:
+                1px solid #ccebd8;
+        }
 
-.book-tag {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
+        /*
+        |--------------------------------------------------------------------------
+        | Process Info
+        |--------------------------------------------------------------------------
+        */
 
-    padding: 5px 9px;
+        .process-box {
+            margin:
+                0 30px
+                25px;
 
-    background: var(--white);
+            padding: 18px;
 
-    border: 1px solid var(--border);
-    border-radius: 6px;
+            border:
+                1px solid var(--border);
 
-    color: var(--text-soft);
+            border-radius: 13px;
 
-    font-size: 12px;
-}
+            background: #fafcfb;
+        }
 
-.book-tag i {
-    color: var(--primary);
-}
+        .process-title {
+            display: flex;
 
-.book-tag strong {
-    color: var(--text);
-}
+            align-items: center;
 
-/* =========================
-   ALERT
-========================= */
+            gap: 9px;
 
-.alert {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
+            margin-bottom: 13px;
 
-    padding: 13px 15px;
+            font-size: 14px;
 
-    margin-bottom: 22px;
+            font-weight: 700;
+        }
 
-    border-radius: 9px;
+        .process-title i {
+            color: var(--green);
+        }
 
-    font-size: 13px;
-    line-height: 1.5;
-}
+        .process-list {
+            margin: 0;
 
-.alert i {
-    margin-top: 2px;
-}
+            padding-left: 20px;
 
-/* Success */
+            color: var(--muted);
 
-.alert-success {
-    background: var(--success-bg);
-    color: var(--success);
+            font-size: 12.5px;
 
-    border: 1px solid #B9E8D0;
-}
+            line-height: 1.7;
+        }
 
-/* Error */
+        .process-list li {
+            padding-left: 3px;
 
-.alert-error {
-    background: var(--danger-bg);
-    color: var(--danger);
+            margin-bottom: 5px;
+        }
 
-    border: 1px solid #F5C7C5;
-}
+        .process-list strong {
+            color: var(--text);
+        }
 
-/* =========================
-   INFORMATION BOX
-========================= */
+        /*
+        |--------------------------------------------------------------------------
+        | Form
+        |--------------------------------------------------------------------------
+        */
 
-.info-box {
-    padding: 18px 20px;
+        .form-area {
+            padding:
+                0 30px
+                30px;
+        }
 
-    margin-bottom: 26px;
+        .form-group {
+            margin-bottom: 20px;
+        }
 
-    background: var(--primary-light);
+        .form-label {
+            display: block;
 
-    border: 1px solid #DDD6FE;
-    border-radius: 10px;
-}
+            margin-bottom: 8px;
 
-.info-title {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+            font-size: 13px;
 
-    margin-bottom: 10px;
+            font-weight: 700;
+        }
 
-    color: var(--text);
+        .form-control {
+            width: 100%;
 
-    font-size: 14px;
-    font-weight: 700;
-}
+            height: 46px;
 
-.info-title i {
-    color: var(--primary);
-}
+            padding:
+                0 13px;
 
-.info-box ol {
-    margin: 0;
+            border:
+                1px solid var(--border);
 
-    padding-left: 21px;
+            border-radius: 9px;
 
-    color: var(--text-soft);
+            background: white;
 
-    font-size: 13px;
-    line-height: 1.7;
-}
+            color: var(--text);
 
-.info-box li {
-    padding-left: 3px;
-}
+            font-family: inherit;
 
-.info-box li::marker {
-    color: var(--primary);
-    font-weight: 600;
-}
+            font-size: 14px;
 
-.info-box strong {
-    color: var(--text);
-}
+            outline: none;
 
-/* =========================
-   FORM TITLE
-========================= */
+            transition:
+                border-color 0.2s,
+                box-shadow 0.2s;
+        }
 
-.form-title {
-    margin: 0 0 17px;
+        .form-control:focus {
+            border-color: var(--green);
 
-    color: var(--text);
+            box-shadow:
+                0 0 0 3px
+                rgba(25, 135, 84, 0.10);
+        }
 
-    font-family: 'Poppins', sans-serif;
+        .form-hint {
+            margin: 7px 0 0;
 
-    font-size: 16px;
-    font-weight: 700;
-}
+            color: var(--muted);
 
-/* =========================
-   FORM
-========================= */
+            font-size: 11.5px;
+        }
 
-.form-group {
-    margin-bottom: 20px;
-}
+        /*
+        |--------------------------------------------------------------------------
+        | Summary
+        |--------------------------------------------------------------------------
+        */
 
-.form-label {
-    display: block;
+        .summary {
+            margin-top: 5px;
 
-    margin-bottom: 7px;
+            border-top:
+                1px solid var(--border);
+        }
 
-    color: var(--text);
+        .summary-row {
+            display: flex;
 
-    font-size: 13px;
-    font-weight: 600;
-}
+            align-items: center;
+            justify-content: space-between;
 
-.input-wrapper {
-    position: relative;
-}
+            gap: 20px;
 
-.input-wrapper i {
-    position: absolute;
+            padding: 13px 0;
 
-    left: 13px;
-    top: 50%;
+            border-bottom:
+                1px dashed var(--border);
 
-    transform: translateY(-50%);
+            font-size: 13px;
+        }
 
-    color: #9AA1B5;
+        .summary-row span {
+            color: var(--muted);
+        }
 
-    font-size: 14px;
+        .summary-row strong {
+            text-align: right;
 
-    pointer-events: none;
-}
+            font-weight: 700;
+        }
 
-.form-control {
-    width: 100%;
+        /*
+        |--------------------------------------------------------------------------
+        | Submit
+        |--------------------------------------------------------------------------
+        */
 
-    padding: 11px 13px 11px 39px;
+        .btn-submit {
+            width: 100%;
 
-    background: var(--white);
+            height: 48px;
 
-    border: 1px solid var(--border);
-    border-radius: 8px;
+            display: flex;
 
-    color: var(--text);
+            align-items: center;
+            justify-content: center;
 
-    font-family: inherit;
+            gap: 9px;
 
-    font-size: 14px;
+            margin-top: 22px;
 
-    transition:
-        border-color 0.2s ease,
-        box-shadow 0.2s ease;
-}
+            border: 0;
 
-.form-control:hover {
-    border-color: #D3D6E2;
-}
+            border-radius: 10px;
 
-.form-control:focus {
-    outline: none;
+            background: var(--green);
 
-    border-color: var(--primary);
+            color: white;
 
-    box-shadow: 0 0 0 3px rgba(108, 77, 223, 0.10);
-}
+            font-family: inherit;
 
-.form-hint {
-    margin: 7px 0 0;
+            font-size: 14px;
 
-    color: var(--text-soft);
+            font-weight: 700;
 
-    font-size: 12px;
-}
+            cursor: pointer;
 
-/* =========================
-   SUMMARY
-========================= */
+            transition:
+                background 0.2s,
+                transform 0.15s,
+                box-shadow 0.2s;
+        }
 
-.summary {
-    margin-top: 24px;
+        .btn-submit:hover {
+            background: var(--green-dark);
 
-    overflow: hidden;
+            box-shadow:
+                0 8px 20px
+                rgba(25, 135, 84, 0.20);
 
-    background: var(--white);
+            transform: translateY(-1px);
+        }
 
-    border: 1px solid var(--border);
-    border-radius: 10px;
-}
+        .btn-submit:active {
+            transform: translateY(0);
+        }
 
-.summary-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+        /*
+        |--------------------------------------------------------------------------
+        | Disabled / Empty Stock
+        |--------------------------------------------------------------------------
+        */
 
-    gap: 15px;
+        .empty-stock {
+            margin:
+                0 30px
+                30px;
 
-    padding: 13px 15px;
+            padding: 20px;
 
-    font-size: 13px;
-}
+            text-align: center;
 
-.summary-row + .summary-row {
-    border-top: 1px solid var(--border);
-}
+            background: var(--danger-soft);
 
-.summary-label {
-    color: var(--text-soft);
-}
+            border:
+                1px solid #f3c9ce;
 
-.summary-label i {
-    width: 17px;
+            border-radius: 12px;
 
-    margin-right: 4px;
+            color: #a52834;
 
-    color: var(--primary);
-}
+            font-size: 13px;
+        }
 
-.summary-value {
-    color: var(--text);
+        .empty-stock i {
+            display: block;
 
-    font-weight: 600;
+            margin-bottom: 8px;
 
-    text-align: right;
-}
+            font-size: 24px;
+        }
 
-.summary-value small {
-    color: var(--text-soft);
+        /*
+        |--------------------------------------------------------------------------
+        | Footer note
+        |--------------------------------------------------------------------------
+        */
 
-    font-size: 11px;
-    font-weight: 500;
-}
+        .footer-note {
+            margin-top: 18px;
 
-/* =========================
-   SUBMIT BUTTON
-========================= */
+            text-align: center;
 
-.btn-submit {
-    width: 100%;
+            color: var(--muted);
 
-    display: flex;
-    align-items: center;
-    justify-content: center;
+            font-size: 11px;
 
-    gap: 8px;
+            line-height: 1.6;
+        }
 
-    margin-top: 22px;
+        /*
+        |--------------------------------------------------------------------------
+        | Responsive
+        |--------------------------------------------------------------------------
+        */
 
-    padding: 12px 18px;
+        @media (max-width: 600px) {
 
-    background: var(--primary);
-    color: #FFFFFF;
+            .page {
+                padding:
+                    20px 13px
+                    40px;
+            }
 
-    border: none;
-    border-radius: 8px;
+            .card-header {
+                padding: 23px 20px;
+            }
 
-    font-family: inherit;
+            .book-box {
+                margin:
+                    20px;
+            }
 
-    font-size: 14px;
-    font-weight: 600;
+            .process-box {
+                margin:
+                    0 20px
+                    20px;
+            }
 
-    cursor: pointer;
+            .form-area {
+                padding:
+                    0 20px
+                    25px;
+            }
 
-    transition:
-        background 0.2s ease,
-        transform 0.2s ease,
-        box-shadow 0.2s ease;
-}
+            .alert {
+                margin:
+                    0 20px
+                    18px;
+            }
 
-.btn-submit:hover {
-    background: var(--primary-dark);
+            .empty-stock {
+                margin:
+                    0 20px
+                    25px;
+            }
 
-    box-shadow: 0 5px 14px rgba(108, 77, 223, 0.20);
+            .book-box {
+                align-items: flex-start;
+            }
 
-    transform: translateY(-1px);
-}
+            .book-icon {
+                flex-basis: 48px;
 
-.btn-submit:active {
-    transform: translateY(0);
+                width: 48px;
+                height: 60px;
+            }
 
-    box-shadow: none;
-}
+            .card-header h1 {
+                font-size: 20px;
+            }
+        }
 
-.btn-submit i {
-    font-size: 13px;
-}
+    </style>
 
-/* =========================
-   EMPTY STOCK
-========================= */
-
-.empty-stock {
-    padding: 28px 20px;
-
-    text-align: center;
-
-    background: var(--danger-bg);
-
-    border: 1px solid #F5C7C5;
-    border-radius: 10px;
-}
-
-.empty-stock-icon {
-    width: 45px;
-    height: 45px;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    margin: 0 auto 10px;
-
-    background: var(--white);
-
-    border-radius: 50%;
-
-    color: var(--danger);
-
-    font-size: 17px;
-}
-
-.empty-stock strong {
-    display: block;
-
-    margin-bottom: 5px;
-
-    color: var(--danger);
-
-    font-size: 14px;
-}
-
-.empty-stock p {
-    margin: 0;
-
-    color: #9F302D;
-
-    font-size: 12px;
-    line-height: 1.5;
-}
-
-/* =========================
-   FOOTER
-========================= */
-
-.footer {
-    margin-top: 25px;
-
-    color: #9298AA;
-
-    font-size: 12px;
-
-    text-align: center;
-}
-
-/* =========================
-   INPUT NUMBER
-========================= */
-
-input[type="number"] {
-    appearance: textfield;
-    -moz-appearance: textfield;
-}
-
-input[type="number"]::-webkit-inner-spin-button,
-input[type="number"]::-webkit-outer-spin-button {
-    margin: 0;
-
-    -webkit-appearance: none;
-}
-
-/* =========================
-   SELECTION
-========================= */
-
-::selection {
-    background: rgba(108, 77, 223, 0.18);
-    color: var(--text);
-}
-
-/* =========================
-   SCROLLBAR
-========================= */
-
-::-webkit-scrollbar {
-    width: 8px;
-}
-
-::-webkit-scrollbar-track {
-    background: var(--bg);
-}
-
-::-webkit-scrollbar-thumb {
-    background: #C8C5D9;
-
-    border-radius: 10px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-    background: #AAA5C2;
-}
-
-/* =========================
-   RESPONSIVE
-========================= */
-
-@media (max-width: 650px) {
-
-    .topbar {
-        height: 62px;
-    }
-
-    .topbar-inner {
-        width: calc(100% - 28px);
-    }
-
-    .brand-name {
-        font-size: 15px;
-    }
-
-    .user-info span {
-        display: none;
-    }
-
-    .page {
-        width: calc(100% - 24px);
-
-        padding-top: 22px;
-        padding-bottom: 35px;
-    }
-
-    .card-header,
-    .card-body {
-        padding: 20px;
-    }
-
-    .page-title {
-        font-size: 19px;
-    }
-
-    .title-icon {
-        width: 38px;
-        height: 38px;
-
-        font-size: 16px;
-    }
-
-    .subtitle {
-        margin-left: 0;
-        margin-top: 9px;
-    }
-
-    .book-box {
-        gap: 13px;
-
-        padding: 14px;
-    }
-
-    .book-icon {
-        flex-basis: 42px;
-
-        width: 42px;
-        height: 52px;
-    }
-
-    .book-title {
-        font-size: 15px;
-    }
-
-    .book-details {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-
-    .summary-row {
-        align-items: flex-start;
-    }
-
-    .summary-value {
-        max-width: 55%;
-    }
-}
-
-@media (max-width: 420px) {
-
-    .topbar-inner {
-        width: calc(100% - 20px);
-    }
-
-    .page {
-        width: calc(100% - 18px);
-    }
-
-    .card-header,
-    .card-body {
-        padding: 17px;
-    }
-
-    .page-title {
-        font-size: 18px;
-    }
-
-    .book-box {
-        flex-direction: column;
-    }
-
-    .book-icon {
-        width: 44px;
-        height: 44px;
-    }
-
-    .summary-row {
-        flex-direction: column;
-        gap: 5px;
-    }
-
-    .summary-value {
-        max-width: 100%;
-
-        text-align: left;
-    }
-}
-</style>
 </head>
 
 <body>
 
-    <header class="topbar">
-        <div class="topbar-inner">
+<div class="page">
 
-            <a href="../../index.php" class="brand">
-                <div class="brand-icon">
-                    <i class="fas fa-book-open"></i>
-                </div>
+    <a
+        href="../../index.php#katalog"
+        class="back-link"
+    >
+        <i class="fas fa-arrow-left"></i>
+        Kembali ke katalog
+    </a>
 
-                <span class="brand-name">
-                    Perpustakaan
-                </span>
-            </a>
+    <div class="card">
 
-            <div class="user-info">
-                <div class="user-icon">
-                    <i class="fas fa-user"></i>
-                </div>
+        <!-- HEADER -->
 
-                <span>
-                    <?= htmlspecialchars($me['NamaLengkap'] ?? $me['nama_lengkap'] ?? $me['username'] ?? 'Peminjam', ENT_QUOTES, 'UTF-8') ?>
-                </span>
+        <div class="card-header">
+
+            <div class="header-icon">
+                <i class="fas fa-book-open"></i>
             </div>
 
+            <h1>
+                Ajukan Peminjaman
+            </h1>
+
+            <p>
+                Lengkapi jumlah buku yang ingin kamu pinjam.
+                Pengajuan akan diperiksa oleh admin atau petugas
+                sebelum peminjaman disetujui.
+            </p>
+
         </div>
-    </header>
 
-    <main class="page">
 
-        <a href="../../index.php#katalog" class="back-link">
-            <i class="fas fa-arrow-left"></i>
-            Kembali ke katalog
-        </a>
+        <!-- DATA BUKU -->
 
-        <section class="card">
+        <div class="book-box">
 
-            <div class="card-header">
+            <div class="book-icon">
+                <i class="fas fa-book"></i>
+            </div>
 
-                <h1 class="page-title">
-                    <span class="title-icon">
-                        <i class="fas fa-book-reader"></i>
-                    </span>
+            <div class="book-info">
 
-                    Ajukan Peminjaman
-                </h1>
+                <h2 class="book-title">
+                    <?= htmlspecialchars(
+                        $book['judul'],
+                        ENT_QUOTES,
+                        'UTF-8'
+                    ) ?>
+                </h2>
 
-                <p class="subtitle">
-                    Isi jumlah buku yang ingin kamu pinjam. Pastikan data peminjaman sudah sesuai sebelum mengajukan.
+                <p class="book-author">
+                    Oleh
+                    <strong>
+                        <?= htmlspecialchars(
+                            $book['penulis'],
+                            ENT_QUOTES,
+                            'UTF-8'
+                        ) ?>
+                    </strong>
                 </p>
 
-            </div>
+                <div class="book-details">
 
-            <div class="card-body">
+                    <span class="book-badge">
+                        <i class="fas fa-layer-group"></i>
 
-                <div class="book-box">
+                        <?= htmlspecialchars(
+                            $book['nama_kategori'] ?? '-',
+                            ENT_QUOTES,
+                            'UTF-8'
+                        ) ?>
+                    </span>
 
-                    <div class="book-icon">
-                        <i class="fas fa-book"></i>
-                    </div>
+                    <span class="book-badge stock">
+                        <i class="fas fa-box"></i>
 
-                    <div class="book-content">
-
-                        <h2 class="book-title">
-                            <?= htmlspecialchars($book['judul'], ENT_QUOTES, 'UTF-8') ?>
-                        </h2>
-
-                        <p class="book-author">
-                            oleh <?= htmlspecialchars($book['penulis'], ENT_QUOTES, 'UTF-8') ?>
-                        </p>
-
-                        <div class="book-details">
-
-                            <span class="book-tag">
-                                <i class="fas fa-layer-group"></i>
-                                <?= htmlspecialchars($book['nama_kategori'] ?? '-', ENT_QUOTES, 'UTF-8') ?>
-                            </span>
-
-                            <span class="book-tag">
-                                <i class="fas fa-box"></i>
-                                Stok:
-                                <strong><?= $stokTersedia ?></strong>
-                            </span>
-
-                        </div>
-
-                    </div>
+                        Stok:
+                        <?= $stokTersedia ?>
+                    </span>
 
                 </div>
 
-                <?php if ($flash): ?>
-
-                    <div class="alert alert-<?= $flash['type'] === 'success' ? 'success' : 'error' ?>">
-
-                        <i class="fas fa-<?= $flash['type'] === 'success' ? 'circle-check' : 'circle-exclamation' ?>"></i>
-
-                        <span>
-                            <?= htmlspecialchars($flash['message'], ENT_QUOTES, 'UTF-8') ?>
-                        </span>
-
-                    </div>
-
-                <?php endif; ?>
-
-                <div class="info-box">
-
-                    <div class="info-title">
-                        <i class="fas fa-circle-info"></i>
-                        Alur Peminjaman
-                    </div>
-
-                    <ol>
-                        <li>
-                            Tentukan jumlah eksemplar yang ingin dipinjam.
-                        </li>
-
-                        <li>
-                            Klik tombol <strong>Ajukan Peminjaman</strong>.
-                        </li>
-
-                        <li>
-                            Peminjaman tercatat aktif mulai hari ini dan memiliki batas pengembalian 7 hari.
-                        </li>
-
-                        <li>
-                            Status peminjaman dapat dilihat melalui halaman <strong>Riwayat Saya</strong>.
-                        </li>
-                    </ol>
-
-                </div>
-
-                <?php if ($stokTersedia <= 0): ?>
-
-                    <div class="empty-stock">
-
-                        <div class="empty-stock-icon">
-                            <i class="fas fa-box-open"></i>
-                        </div>
-
-                        <strong>Stok Buku Sedang Habis</strong>
-
-                        <p>
-                            Buku ini belum dapat dipinjam karena stok yang tersedia saat ini adalah 0.
-                        </p>
-
-                    </div>
-
-                <?php else: ?>
-
-                    <form action="pinjam_proses.php" method="POST">
-
-                        <?= csrfField() ?>
-
-                        <input
-                            type="hidden"
-                            name="book_id"
-                            value="<?= (int) $book['id'] ?>">
-
-                        <h3 class="form-title">
-                            Detail Peminjaman
-                        </h3>
-
-                        <div class="form-group">
-
-                            <label class="form-label" for="jumlah">
-                                Jumlah Eksemplar
-                            </label>
-
-                            <div class="input-wrapper">
-
-                                <i class="fas fa-hashtag"></i>
-
-                                <input
-                                    type="number"
-                                    id="jumlah"
-                                    name="jumlah"
-                                    class="form-control"
-                                    min="1"
-                                    max="<?= $stokTersedia ?>"
-                                    value="1"
-                                    required>
-
-                            </div>
-
-                            <p class="form-hint">
-                                Maksimal <?= $stokTersedia ?> eksemplar sesuai stok yang tersedia.
-                            </p>
-
-                        </div>
-
-                        <div class="summary">
-
-                            <div class="summary-row">
-
-                                <span class="summary-label">
-                                    <i class="far fa-calendar"></i>
-                                    Tanggal Pinjam
-                                </span>
-
-                                <strong class="summary-value">
-                                    <?= htmlspecialchars($tanggalPinjam, ENT_QUOTES, 'UTF-8') ?>
-                                </strong>
-
-                            </div>
-
-                            <div class="summary-row">
-
-                                <span class="summary-label">
-                                    <i class="far fa-calendar-check"></i>
-                                    Batas Pengembalian
-                                </span>
-
-                                <strong class="summary-value">
-                                    <?= htmlspecialchars($tanggalKembali, ENT_QUOTES, 'UTF-8') ?>
-                                    <small>(7 hari)</small>
-                                </strong>
-
-                            </div>
-
-                        </div>
-
-                        <button type="submit" class="btn-submit">
-
-                            <i class="fas fa-check"></i>
-
-                            Ajukan Peminjaman
-
-                        </button>
-
-                    </form>
-
-                <?php endif; ?>
-
             </div>
 
-        </section>
-
-        <div class="footer">
-            Perpustakaan Digital &copy; <?= date('Y') ?>
         </div>
 
-    </main>
+
+        <!-- FLASH -->
+
+        <?php if ($flash): ?>
+
+            <div
+                class="alert alert-<?= $flash['type'] === 'success'
+                    ? 'success'
+                    : 'error' ?>"
+            >
+
+                <?= htmlspecialchars(
+                    $flash['message'],
+                    ENT_QUOTES,
+                    'UTF-8'
+                ) ?>
+
+            </div>
+
+        <?php endif; ?>
+
+
+        <!-- ALUR -->
+
+        <div class="process-box">
+
+            <div class="process-title">
+
+                <i class="fas fa-circle-info"></i>
+
+                Cara kerja peminjaman
+
+            </div>
+
+            <ol class="process-list">
+
+                <li>
+                    Tentukan jumlah buku yang ingin dipinjam.
+                </li>
+
+                <li>
+                    Klik
+                    <strong>
+                        Ajukan Peminjaman
+                    </strong>.
+                </li>
+
+                <li>
+                    Pengajuan akan berstatus
+                    <strong>
+                        Menunggu Konfirmasi
+                    </strong>.
+                </li>
+
+                <li>
+                    Admin atau petugas akan memeriksa
+                    pengajuan kamu.
+                </li>
+
+                <li>
+                    Buku baru berstatus
+                    <strong>
+                        Dipinjam
+                    </strong>
+                    setelah pengajuan dikonfirmasi.
+                </li>
+
+            </ol>
+
+        </div>
+
+
+        <?php if ($stokTersedia <= 0): ?>
+
+            <!-- STOK HABIS -->
+
+            <div class="empty-stock">
+
+                <i class="fas fa-box-open"></i>
+
+                <strong>
+                    Stok buku sedang habis.
+                </strong>
+
+                <br>
+
+                Buku ini belum dapat diajukan untuk peminjaman.
+
+            </div>
+
+        <?php else: ?>
+
+            <!-- FORM -->
+
+            <div class="form-area">
+
+                <form
+                    action="pinjam_proses.php"
+                    method="POST"
+                >
+
+                    <?= csrfField() ?>
+
+                    <input
+                        type="hidden"
+                        name="book_id"
+                        value="<?= (int) $book['id'] ?>"
+                    >
+
+
+                    <div class="form-group">
+
+                        <label
+                            for="jumlah"
+                            class="form-label"
+                        >
+                            Jumlah Eksemplar
+                        </label>
+
+                        <input
+                            type="number"
+                            id="jumlah"
+                            name="jumlah"
+                            class="form-control"
+                            min="1"
+                            max="<?= $stokTersedia ?>"
+                            value="1"
+                            required
+                        >
+
+                        <p class="form-hint">
+
+                            Maksimal
+                            <strong>
+                                <?= $stokTersedia ?>
+                            </strong>
+                            eksemplar sesuai stok yang tersedia.
+
+                        </p>
+
+                    </div>
+
+
+                    <!-- RINGKASAN -->
+
+                    <div class="summary">
+
+                        <div class="summary-row">
+
+                            <span>
+                                Tanggal pengajuan
+                            </span>
+
+                            <strong>
+                                <?= htmlspecialchars(
+                                    $tanggalPengajuan,
+                                    ENT_QUOTES,
+                                    'UTF-8'
+                                ) ?>
+                            </strong>
+
+                        </div>
+
+
+                        <div class="summary-row">
+
+                            <span>
+                                Perkiraan masa pinjam
+                            </span>
+
+                            <strong>
+                                Maksimal 7 hari
+                            </strong>
+
+                        </div>
+
+
+                        <div class="summary-row">
+
+                            <span>
+                                Status setelah diajukan
+                            </span>
+
+                            <strong style="color: var(--green);">
+                                Menunggu Konfirmasi
+                            </strong>
+
+                        </div>
+
+                    </div>
+
+
+                    <button
+                        type="submit"
+                        class="btn-submit"
+                    >
+
+                        <i class="fas fa-paper-plane"></i>
+
+                        Ajukan Peminjaman
+
+                    </button>
+
+                    <div class="footer-note">
+
+                        Pengajuan belum dianggap sebagai
+                        peminjaman aktif sampai dikonfirmasi
+                        oleh admin atau petugas.
+
+                    </div>
+
+                </form>
+
+            </div>
+
+        <?php endif; ?>
+
+    </div>
+
+</div>
 
 </body>
-
 </html>

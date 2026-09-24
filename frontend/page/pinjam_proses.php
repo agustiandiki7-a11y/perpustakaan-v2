@@ -20,12 +20,6 @@ if (($me['role'] ?? '') !== 'peminjam') {
     exit('Akses ditolak.');
 }
 
-/*
-|--------------------------------------------------------------------------
-| Validasi Request
-|--------------------------------------------------------------------------
-*/
-
 if (
     $_SERVER['REQUEST_METHOD'] !== 'POST' ||
     !verifyCsrf($_POST['csrf_token'] ?? null)
@@ -44,28 +38,19 @@ if ($bookId <= 0 || $jumlah <= 0) {
     exit;
 }
 
-$db = (new Database())->connect();
-
 try {
+    $db = (new Database())->connect();
 
     $db->beginTransaction();
 
     /*
     |--------------------------------------------------------------------------
-    | Cek Buku
-    |--------------------------------------------------------------------------
-    | Buku dikunci hanya untuk memastikan data buku tidak berubah
-    | ketika pengajuan sedang dibuat.
-    |
-    | Stok TIDAK dikurangi di sini.
+    | CEK BUKU
     |--------------------------------------------------------------------------
     */
 
     $stmtBuku = $db->prepare("
-        SELECT
-            id,
-            judul,
-            stok_tersedia
+        SELECT id, judul, stok_tersedia
         FROM books
         WHERE id = ?
           AND status = 'aktif'
@@ -74,35 +59,32 @@ try {
 
     $stmtBuku->execute([$bookId]);
 
-    $buku = $stmtBuku->fetch();
+    $buku = $stmtBuku->fetch(PDO::FETCH_ASSOC);
 
     if (!$buku) {
         $db->rollBack();
 
-        setFlash(
-            'error',
-            'Buku tidak ditemukan atau sudah tidak aktif.'
-        );
-
+        setFlash('error', 'Buku tidak ditemukan atau sudah tidak aktif.');
         header('Location: ../../index.php');
         exit;
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Validasi Stok
-    |--------------------------------------------------------------------------
-    | Kita tetap mengecek stok saat pengajuan dibuat.
-    | Tetapi stok belum dikurangi sampai admin/petugas menyetujui.
-    |--------------------------------------------------------------------------
-    */
+    $stokTersedia = (int) $buku['stok_tersedia'];
 
-    if ($jumlah > (int) $buku['stok_tersedia']) {
+    if ($stokTersedia <= 0) {
+        $db->rollBack();
+
+        setFlash('error', 'Stok buku sedang habis.');
+        header('Location: pinjam.php?id=' . $bookId);
+        exit;
+    }
+
+    if ($jumlah > $stokTersedia) {
         $db->rollBack();
 
         setFlash(
             'error',
-            'Jumlah buku melebihi stok yang tersedia saat ini.'
+            'Jumlah buku melebihi stok yang tersedia.'
         );
 
         header('Location: pinjam.php?id=' . $bookId);
@@ -111,50 +93,84 @@ try {
 
     /*
     |--------------------------------------------------------------------------
-    | Buat Kode Peminjaman
+    | CEK PENGAJUAN YANG MASIH MENUNGGU
+    |--------------------------------------------------------------------------
+    */
+
+    $stmtCek = $db->prepare("
+        SELECT loans.id
+        FROM loans
+        INNER JOIN loan_details
+            ON loan_details.loan_id = loans.id
+        WHERE loans.user_id = ?
+          AND loan_details.book_id = ?
+          AND loans.status = 'menunggu'
+        LIMIT 1
+    ");
+
+    $stmtCek->execute([
+        $me['id'],
+        $bookId
+    ]);
+
+    if ($stmtCek->fetch()) {
+        $db->rollBack();
+
+        setFlash(
+            'error',
+            'Kamu sudah mengajukan buku ini dan masih menunggu konfirmasi.'
+        );
+
+        header('Location: ../../index.php');
+        exit;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | KODE PEMINJAMAN
     |--------------------------------------------------------------------------
     */
 
     do {
-
         $kodePeminjaman =
             'PJM-' .
             date('Ymd') .
             '-' .
             random_int(1000, 9999);
 
-        $cekKode = $db->prepare("
-            SELECT 1
+        $stmtKode = $db->prepare("
+            SELECT id
             FROM loans
             WHERE kode_peminjaman = ?
             LIMIT 1
         ");
 
-        $cekKode->execute([$kodePeminjaman]);
+        $stmtKode->execute([$kodePeminjaman]);
 
-    } while ($cekKode->fetchColumn());
+    } while ($stmtKode->fetchColumn());
 
     /*
     |--------------------------------------------------------------------------
-    | Tanggal Pengajuan
+    | TANGGAL
     |--------------------------------------------------------------------------
+    |
+    | Karena database kita mewajibkan tanggal_pinjam dan
+    | tanggal_jatuh_tempo, kita isi dari awal.
+    |
+    | Tetapi status tetap MENUNGGU.
+    |
     */
 
     $tanggalPengajuan = date('Y-m-d');
+    $tanggalPinjam = date('Y-m-d');
+    $tanggalJatuhTempo = date(
+        'Y-m-d',
+        strtotime('+7 days')
+    );
 
     /*
     |--------------------------------------------------------------------------
-    | Buat Data Peminjaman
-    |--------------------------------------------------------------------------
-    |
-    | Status:
-    | menunggu
-    |
-    | Karena belum dikonfirmasi admin/petugas:
-    |
-    | tanggal_pinjam       = NULL
-    | tanggal_jatuh_tempo  = NULL
-    |
+    | INSERT LOANS
     |--------------------------------------------------------------------------
     */
 
@@ -165,6 +181,7 @@ try {
             tanggal_pengajuan,
             tanggal_pinjam,
             tanggal_jatuh_tempo,
+            tanggal_kembali,
             status,
             catatan
         )
@@ -172,7 +189,8 @@ try {
             ?,
             ?,
             ?,
-            NULL,
+            ?,
+            ?,
             NULL,
             'menunggu',
             ?
@@ -183,14 +201,16 @@ try {
         $kodePeminjaman,
         $me['id'],
         $tanggalPengajuan,
-        'Pengajuan peminjaman melalui website dan sedang menunggu konfirmasi admin/petugas.'
+        $tanggalPinjam,
+        $tanggalJatuhTempo,
+        'Pengajuan peminjaman melalui website dan menunggu konfirmasi admin/petugas.'
     ]);
 
     $loanId = $db->lastInsertId();
 
     /*
     |--------------------------------------------------------------------------
-    | Simpan Detail Buku
+    | INSERT DETAIL
     |--------------------------------------------------------------------------
     */
 
@@ -211,29 +231,19 @@ try {
 
     /*
     |--------------------------------------------------------------------------
-    | PENTING
+    | STOK TIDAK DIKURANGI
     |--------------------------------------------------------------------------
     |
-    | Stok BELUM dikurangi.
+    | Karena masih MENUNGGU.
+    | Stok baru dikurangi saat admin/petugas menyetujui.
     |
-    | Stok baru akan dikurangi ketika admin/petugas menekan
-    | tombol "Konfirmasi Peminjaman".
-    |
-    |--------------------------------------------------------------------------
     */
 
     $db->commit();
 
     /*
     |--------------------------------------------------------------------------
-    | Pengajuan Berhasil
-    |--------------------------------------------------------------------------
-    |
-    | Jangan langsung masuk riwayat.
-    | Nanti kita buat halaman peminjaman_berhasil.php
-    | yang menampilkan popup/card:
-    |
-    | "Peminjaman sedang diproses"
+    | BERHASIL
     |--------------------------------------------------------------------------
     */
 
@@ -246,7 +256,7 @@ try {
 
 } catch (PDOException $e) {
 
-    if ($db->inTransaction()) {
+    if (isset($db) && $db->inTransaction()) {
         $db->rollBack();
     }
 
