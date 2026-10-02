@@ -1,1 +1,1 @@
-<?php require __DIR__ . "/../shared/dashboard.php";
+<?php require __DIR__ . "/../../shared/kategori_index.php";

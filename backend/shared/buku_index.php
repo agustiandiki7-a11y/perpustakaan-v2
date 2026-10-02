@@ -7,19 +7,26 @@ $categories = $db->query("SELECT id, nama_kategori FROM categories WHERE status 
 
 $editData = null;
 if (isset($_GET['edit'])) {
-    $stmt = $db->prepare('SELECT * FROM books WHERE id = ?');
-    $stmt->execute([(int) $_GET['edit']]);
-    $editData = $stmt->fetch() ?: null;
+    $editId = filter_input(INPUT_GET, 'edit', FILTER_VALIDATE_INT);
+    if ($editId) {
+        $stmt = $db->prepare('SELECT * FROM books WHERE id = ?');
+        $stmt->execute([$editId]);
+        $editData = $stmt->fetch() ?: null;
+    }
 }
 
 $keyword = trim($_GET['q'] ?? '');
-$sql = "SELECT books.*, categories.nama_kategori FROM books LEFT JOIN categories ON categories.id = books.category_id";
+$sql = "SELECT books.*, categories.nama_kategori
+        FROM books
+        LEFT JOIN categories ON categories.id = books.category_id";
 $params = [];
+
 if ($keyword !== '') {
     $sql .= " WHERE books.judul LIKE ? OR books.kode_buku LIKE ? OR books.penulis LIKE ?";
     $like = '%' . $keyword . '%';
     $params = [$like, $like, $like];
 }
+
 $sql .= " ORDER BY books.id DESC";
 $stmt = $db->prepare($sql);
 $stmt->execute($params);
@@ -28,8 +35,12 @@ $books = $stmt->fetchAll();
 
 <div class="panel mb-4">
     <div class="panel-heading">
-        <h2><?= $editData ? 'Edit Buku' : 'Tambah Buku' ?></h2>
+        <div>
+            <h2><?= $editData ? 'Edit Buku' : 'Tambah Buku' ?></h2>
+            <p class="form-hint">Kode buku dibuat otomatis oleh sistem. Jika judul yang sama ditambahkan lagi, stok akan digabung ke kode yang sudah ada.</p>
+        </div>
     </div>
+
     <form action="proses.php" method="POST" enctype="multipart/form-data">
         <?= csrfField() ?>
         <?php if ($editData): ?>
@@ -40,17 +51,20 @@ $books = $stmt->fetchAll();
         <?php endif; ?>
 
         <div class="row g-3">
-            <div class="col-md-3">
-                <label class="form-label">Kode Buku</label>
-                <input type="text" name="kode_buku" class="form-control" required
-                    value="<?= htmlspecialchars($editData['kode_buku'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
-            </div>
-            <div class="col-md-4">
+            <?php if ($editData): ?>
+                <div class="col-md-3">
+                    <label class="form-label">Kode Buku</label>
+                    <input type="text" class="form-control" value="<?= htmlspecialchars($editData['kode_buku'], ENT_QUOTES, 'UTF-8') ?>" readonly>
+                </div>
+            <?php endif; ?>
+
+            <div class="<?= $editData ? 'col-md-4' : 'col-md-5' ?>">
                 <label class="form-label">Judul</label>
-                <input type="text" name="judul" class="form-control" required
-                    value="<?= htmlspecialchars($editData['judul'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
+                <input type="text" name="judul" class="form-control" required maxlength="255"
+                       value="<?= htmlspecialchars($editData['judul'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
             </div>
-            <div class="col-md-5">
+
+            <div class="<?= $editData ? 'col-md-5' : 'col-md-7' ?>">
                 <label class="form-label">Kategori</label>
                 <select name="category_id" class="form-control" required>
                     <option value="">-- Pilih Kategori --</option>
@@ -64,28 +78,29 @@ $books = $stmt->fetchAll();
 
             <div class="col-md-4">
                 <label class="form-label">Penulis</label>
-                <input type="text" name="penulis" class="form-control" required
-                    value="<?= htmlspecialchars($editData['penulis'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
+                <input type="text" name="penulis" class="form-control" required maxlength="150"
+                       value="<?= htmlspecialchars($editData['penulis'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
             </div>
             <div class="col-md-4">
                 <label class="form-label">Penerbit</label>
-                <input type="text" name="penerbit" class="form-control"
-                    value="<?= htmlspecialchars($editData['penerbit'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
+                <input type="text" name="penerbit" class="form-control" maxlength="150"
+                       value="<?= htmlspecialchars($editData['penerbit'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
             </div>
             <div class="col-md-4">
                 <label class="form-label">Tahun Terbit</label>
-                <input type="number" name="tahun_terbit" class="form-control" min="1900" max="2100"
-                    value="<?= htmlspecialchars($editData['tahun_terbit'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
+                <input type="number" name="tahun_terbit" class="form-control" min="1900" max="<?= (int) date('Y') + 1 ?>"
+                       value="<?= htmlspecialchars($editData['tahun_terbit'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
             </div>
 
             <div class="col-md-3">
                 <label class="form-label">Jumlah Stok</label>
                 <input type="number" name="jumlah_stok" class="form-control" min="0" required
-                    value="<?= htmlspecialchars($editData['jumlah_stok'] ?? '0', ENT_QUOTES, 'UTF-8') ?>">
+                       value="<?= htmlspecialchars($editData['jumlah_stok'] ?? '0', ENT_QUOTES, 'UTF-8') ?>">
                 <?php if ($editData): ?>
-                    <p class="form-hint">Stok tersedia saat ini: <?= (int) $editData['stok_tersedia'] ?></p>
+                    <p class="form-hint">Stok tersedia: <?= (int) $editData['stok_tersedia'] ?> dari <?= (int) $editData['jumlah_stok'] ?>.</p>
                 <?php endif; ?>
             </div>
+
             <div class="col-md-3">
                 <label class="form-label">Status</label>
                 <select name="status" class="form-control">
@@ -93,11 +108,12 @@ $books = $stmt->fetchAll();
                     <option value="nonaktif" <?= ($editData['status'] ?? '') === 'nonaktif' ? 'selected' : '' ?>>Nonaktif</option>
                 </select>
             </div>
+
             <div class="col-md-6">
                 <label class="form-label">Cover (JPG/PNG, maks 10MB)</label>
                 <input type="file" name="cover" class="form-control" accept=".jpg,.jpeg,.png">
                 <?php if (!empty($editData['cover'])): ?>
-                    <p class="form-hint">File saat ini: <?= htmlspecialchars(basename($editData['cover']), ENT_QUOTES, 'UTF-8') ?> (biarkan kosong kalau gak mau ganti)</p>
+                    <p class="form-hint">File saat ini: <?= htmlspecialchars(basename($editData['cover']), ENT_QUOTES, 'UTF-8') ?>.</p>
                 <?php endif; ?>
             </div>
         </div>
@@ -118,27 +134,21 @@ $books = $stmt->fetchAll();
             <input type="text" name="q" class="form-control" placeholder="Cari judul/penulis/kode..." value="<?= htmlspecialchars($keyword, ENT_QUOTES, 'UTF-8') ?>" style="width:240px;">
         </form>
     </div>
+
     <div class="table-wrap">
         <table class="data-table">
             <thead>
                 <tr>
-                    <th>Kode</th>
-                    <th>Judul</th>
-                    <th>Kategori</th>
-                    <th>Penulis</th>
-                    <th>Stok</th>
-                    <th>Status</th>
-                    <th>Aksi</th>
+                    <th>No</th><th>Kode</th><th>Judul</th><th>Kategori</th><th>Penulis</th><th>Stok</th><th>Status</th><th>Aksi</th>
                 </tr>
             </thead>
             <tbody>
                 <?php if (empty($books)): ?>
-                    <tr>
-                        <td colspan="7" class="text-center text-muted py-4">Belum ada buku.</td>
-                    </tr>
+                    <tr><td colspan="8" class="text-center text-muted py-4">Belum ada buku.</td></tr>
                 <?php else: ?>
-                    <?php foreach ($books as $book): ?>
+                    <?php foreach ($books as $index => $book): ?>
                         <tr>
+                            <td><?= $index + 1 ?></td>
                             <td><?= htmlspecialchars($book['kode_buku'], ENT_QUOTES, 'UTF-8') ?></td>
                             <td><?= htmlspecialchars($book['judul'], ENT_QUOTES, 'UTF-8') ?></td>
                             <td><?= htmlspecialchars($book['nama_kategori'] ?? '-', ENT_QUOTES, 'UTF-8') ?></td>

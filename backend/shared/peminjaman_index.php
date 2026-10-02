@@ -1,17 +1,11 @@
 <?php
-
 $pageTitle = 'Peminjaman';
-
 require_once __DIR__ . '/../layouts/header.php';
 require_once __DIR__ . '/../layouts/sidebar.php';
 
 $today = date('Y-m-d');
-
-/*
-|--------------------------------------------------------------------------
-| DATA ANGGOTA
-|--------------------------------------------------------------------------
-*/
+$historyPerPage = 10;
+$historyPage = max(1, (int) ($_GET['page'] ?? 1));
 
 $members = $db->query("
     SELECT id, nama, username
@@ -20,922 +14,218 @@ $members = $db->query("
     ORDER BY nama ASC
 ")->fetchAll();
 
-/*
-|--------------------------------------------------------------------------
-| BUKU TERSEDIA
-|--------------------------------------------------------------------------
-*/
-
 $availableBooks = $db->query("
-    SELECT
-        id,
-        judul,
-        kode_buku,
-        stok_tersedia
+    SELECT id, judul, kode_buku, stok_tersedia
     FROM books
-    WHERE status = 'aktif'
-      AND stok_tersedia > 0
+    WHERE status = 'aktif' AND stok_tersedia > 0
     ORDER BY judul ASC
 ")->fetchAll();
 
-/*
-|--------------------------------------------------------------------------
-| PERMINTAAN PEMINJAMAN MENUNGGU
-|--------------------------------------------------------------------------
-*/
-
-$stmtPending = $db->query("
-    SELECT
-        loans.id,
-        loans.kode_peminjaman,
-        loans.tanggal_pengajuan,
-        loans.catatan,
-        users.nama AS nama_peminjam,
-        users.username,
-
-        GROUP_CONCAT(
-            CONCAT(
-                books.judul,
-                ' (',
-                loan_details.jumlah,
-                ' buku)'
-            )
-            ORDER BY books.judul
-            SEPARATOR ', '
-        ) AS judul_buku
-
+$pendingLoans = $db->query("
+    SELECT loans.id, loans.kode_peminjaman, loans.tanggal_pengajuan, loans.catatan,
+           users.nama AS nama_peminjam, users.username,
+           GROUP_CONCAT(CONCAT(books.judul, ' (', loan_details.jumlah, ' buku)') ORDER BY books.judul SEPARATOR ', ') AS judul_buku
     FROM loans
-
-    INNER JOIN users
-        ON users.id = loans.user_id
-
-    INNER JOIN loan_details
-        ON loan_details.loan_id = loans.id
-
-    INNER JOIN books
-        ON books.id = loan_details.book_id
-
+    INNER JOIN users ON users.id = loans.user_id
+    INNER JOIN loan_details ON loan_details.loan_id = loans.id
+    INNER JOIN books ON books.id = loan_details.book_id
     WHERE loans.status = 'menunggu'
-
     GROUP BY loans.id
+    ORDER BY loans.tanggal_pengajuan ASC, loans.id ASC
+")->fetchAll();
 
-    ORDER BY
-        loans.tanggal_pengajuan ASC,
-        loans.id ASC
-");
+$totalHistory = (int) $db->query("
+    SELECT COUNT(*) FROM loans
+    WHERE status IN ('dipinjam', 'dikembalikan', 'terlambat', 'ditolak')
+")->fetchColumn();
 
-$pendingLoans = $stmtPending->fetchAll();
+$totalHistoryPages = max(1, (int) ceil($totalHistory / $historyPerPage));
+if ($historyPage > $totalHistoryPages) {
+    $historyPage = $totalHistoryPages;
+}
+$historyOffset = ($historyPage - 1) * $historyPerPage;
 
-/*
-|--------------------------------------------------------------------------
-| RIWAYAT PEMINJAMAN
-|--------------------------------------------------------------------------
-*/
-
-$stmtHistory = $db->query("
-    SELECT
-        loans.*,
-
-        users.nama AS nama_peminjam,
-
-        GROUP_CONCAT(
-            CONCAT(
-                books.judul,
-                ' (',
-                loan_details.jumlah,
-                ' buku)'
-            )
-            ORDER BY books.judul
-            SEPARATOR ', '
-        ) AS judul_buku
-
+$stmtHistory = $db->prepare("
+    SELECT loans.*, users.nama AS nama_peminjam,
+           GROUP_CONCAT(CONCAT(books.judul, ' (', loan_details.jumlah, ' buku)') ORDER BY books.judul SEPARATOR ', ') AS judul_buku
     FROM loans
-
-    LEFT JOIN users
-        ON users.id = loans.user_id
-
-    LEFT JOIN loan_details
-        ON loan_details.loan_id = loans.id
-
-    LEFT JOIN books
-        ON books.id = loan_details.book_id
-
-    WHERE loans.status IN (
-        'dipinjam',
-        'dikembalikan',
-        'terlambat',
-        'ditolak'
-    )
-
+    LEFT JOIN users ON users.id = loans.user_id
+    LEFT JOIN loan_details ON loan_details.loan_id = loans.id
+    LEFT JOIN books ON books.id = loan_details.book_id
+    WHERE loans.status IN ('dipinjam', 'dikembalikan', 'terlambat', 'ditolak')
     GROUP BY loans.id
-
     ORDER BY loans.id DESC
-
-    LIMIT 100
+    LIMIT ? OFFSET ?
 ");
-
+$stmtHistory->bindValue(1, $historyPerPage, PDO::PARAM_INT);
+$stmtHistory->bindValue(2, $historyOffset, PDO::PARAM_INT);
+$stmtHistory->execute();
 $loans = $stmtHistory->fetchAll();
-
 ?>
 
-<!-- =========================================================
-     REQUEST PEMINJAMAN
-========================================================= -->
-
 <div class="panel mb-4">
-
     <div class="panel-heading">
-
         <div>
-
-            <h2>
-                Permintaan Peminjaman
-                <?php if (!empty($pendingLoans)): ?>
-                    <span class="badge-pill badge-menunggu">
-                        <?= count($pendingLoans) ?> Menunggu
-                    </span>
-                <?php endif; ?>
-            </h2>
-
-            <p class="form-hint">
-                Pengajuan dari peminjam yang membutuhkan persetujuan admin atau petugas.
-            </p>
-
+            <h2>Permintaan Peminjaman <?= !empty($pendingLoans) ? '<span class="badge-pill badge-menunggu">' . count($pendingLoans) . ' Menunggu</span>' : '' ?></h2>
+            <p class="form-hint">Pengajuan dari peminjam yang membutuhkan persetujuan admin atau petugas.</p>
         </div>
-
     </div>
-
-
     <div class="table-wrap">
-
         <table class="data-table">
-
-            <thead>
-
-                <tr>
-
-                    <th>Kode</th>
-
-                    <th>Peminjam</th>
-
-                    <th>Buku</th>
-
-                    <th>Tanggal Pengajuan</th>
-
-                    <th>Catatan</th>
-
-                    <th>Status</th>
-
-                    <th>Aksi</th>
-
-                </tr>
-
-            </thead>
-
-
+            <thead><tr><th>No</th><th>Kode</th><th>Peminjam</th><th>Buku</th><th>Tanggal Pengajuan</th><th>Status</th><th>Aksi</th></tr></thead>
             <tbody>
-
             <?php if (empty($pendingLoans)): ?>
-
-                <tr>
-
-                    <td
-                        colspan="7"
-                        class="text-center text-muted py-4"
-                    >
-
-                        <i
-                            class="fas fa-inbox"
-                            style="font-size:2rem;opacity:.35;"
-                        ></i>
-
-                        <div style="margin-top:.5rem;">
-                            Belum ada permintaan peminjaman.
-                        </div>
-
-                    </td>
-
-                </tr>
-
+                <tr><td colspan="7" class="text-center text-muted py-4">Belum ada permintaan peminjaman.</td></tr>
             <?php else: ?>
-
-                <?php foreach ($pendingLoans as $loan): ?>
-
+                <?php foreach ($pendingLoans as $i => $loan): ?>
                     <tr>
-
-                        <!-- KODE -->
-
+                        <td><?= $i + 1 ?></td>
+                        <td><strong><?= htmlspecialchars($loan['kode_peminjaman'], ENT_QUOTES, 'UTF-8') ?></strong></td>
+                        <td><?= htmlspecialchars($loan['nama_peminjam'], ENT_QUOTES, 'UTF-8') ?><br><small class="text-muted">@<?= htmlspecialchars($loan['username'], ENT_QUOTES, 'UTF-8') ?></small></td>
+                        <td><?= htmlspecialchars($loan['judul_buku'] ?? '-', ENT_QUOTES, 'UTF-8') ?></td>
+                        <td><?= htmlspecialchars($loan['tanggal_pengajuan'], ENT_QUOTES, 'UTF-8') ?></td>
+                        <td><span class="badge-pill badge-menunggu">Menunggu</span></td>
                         <td>
-
-                            <strong>
-                                <?= htmlspecialchars(
-                                    $loan['kode_peminjaman'],
-                                    ENT_QUOTES,
-                                    'UTF-8'
-                                ) ?>
-                            </strong>
-
-                        </td>
-
-
-                        <!-- PEMINJAM -->
-
-                        <td>
-
-                            <strong>
-                                <?= htmlspecialchars(
-                                    $loan['nama_peminjam'],
-                                    ENT_QUOTES,
-                                    'UTF-8'
-                                ) ?>
-                            </strong>
-
-                            <br>
-
-                            <small class="text-muted">
-
-                                @<?= htmlspecialchars(
-                                    $loan['username'],
-                                    ENT_QUOTES,
-                                    'UTF-8'
-                                ) ?>
-
-                            </small>
-
-                        </td>
-
-
-                        <!-- BUKU -->
-
-                        <td>
-
-                            <?= htmlspecialchars(
-                                $loan['judul_buku'] ?? '-',
-                                ENT_QUOTES,
-                                'UTF-8'
-                            ) ?>
-
-                        </td>
-
-
-                        <!-- TANGGAL -->
-
-                        <td>
-
-                            <?= htmlspecialchars(
-                                $loan['tanggal_pengajuan'],
-                                ENT_QUOTES,
-                                'UTF-8'
-                            ) ?>
-
-                        </td>
-
-
-                        <!-- CATATAN -->
-
-                        <td>
-
-                            <?= htmlspecialchars(
-                                $loan['catatan'] ?? '-',
-                                ENT_QUOTES,
-                                'UTF-8'
-                            ) ?>
-
-                        </td>
-
-
-                        <!-- STATUS -->
-
-                        <td>
-
-                            <span class="badge-pill badge-menunggu">
-
-                                Menunggu
-
-                            </span>
-
-                        </td>
-
-
-                        <!-- AKSI -->
-
-                        <td>
-
-                            <div
-                                style="
-                                    display:flex;
-                                    gap:.5rem;
-                                    flex-wrap:wrap;
-                                "
-                            >
-
-                                <!-- SETUJUI -->
-
-                                <form
-                                    action="proses.php"
-                                    method="POST"
-                                    onsubmit="return confirm(
-                                        'Setujui peminjaman <?= htmlspecialchars(
-                                            $loan['kode_peminjaman'],
-                                            ENT_QUOTES,
-                                            'UTF-8'
-                                        ) ?>? Stok buku akan dikurangi.'
-                                    );"
-                                >
-
+                            <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
+                                <form action="proses.php" method="POST" onsubmit="return confirm('Setujui peminjaman ini? Tanggal dan stok akan diproses otomatis.');">
                                     <?= csrfField() ?>
-
-                                    <input
-                                        type="hidden"
-                                        name="action"
-                                        value="konfirmasi"
-                                    >
-
-                                    <input
-                                        type="hidden"
-                                        name="loan_id"
-                                        value="<?= (int) $loan['id'] ?>"
-                                    >
-
-                                    <button
-                                        type="submit"
-                                        class="btn-brand"
-                                    >
-
-                                        <i class="fas fa-check"></i>
-
-                                        Setujui
-
-                                    </button>
-
+                                    <input type="hidden" name="action" value="konfirmasi">
+                                    <input type="hidden" name="loan_id" value="<?= (int) $loan['id'] ?>">
+                                    <button type="submit" class="btn-brand"><i class="fas fa-check"></i> Setujui</button>
                                 </form>
-
-
-                                <!-- TOLAK -->
-
-                                <form
-                                    action="proses.php"
-                                    method="POST"
-                                    onsubmit="return confirm(
-                                        'Tolak peminjaman <?= htmlspecialchars(
-                                            $loan['kode_peminjaman'],
-                                            ENT_QUOTES,
-                                            'UTF-8'
-                                        ) ?>?'
-                                    );"
-                                >
-
+                                <form action="proses.php" method="POST" onsubmit="return confirm('Tolak peminjaman ini?');">
                                     <?= csrfField() ?>
-
-                                    <input
-                                        type="hidden"
-                                        name="action"
-                                        value="tolak"
-                                    >
-
-                                    <input
-                                        type="hidden"
-                                        name="loan_id"
-                                        value="<?= (int) $loan['id'] ?>"
-                                    >
-
-                                    <button
-                                        type="submit"
-                                        class="btn-danger-outline"
-                                    >
-
-                                        <i class="fas fa-xmark"></i>
-
-                                        Tolak
-
-                                    </button>
-
+                                    <input type="hidden" name="action" value="tolak">
+                                    <input type="hidden" name="loan_id" value="<?= (int) $loan['id'] ?>">
+                                    <button type="submit" class="btn-danger-outline"><i class="fas fa-xmark"></i> Tolak</button>
                                 </form>
-
                             </div>
-
                         </td>
-
                     </tr>
-
                 <?php endforeach; ?>
-
             <?php endif; ?>
-
             </tbody>
-
         </table>
-
     </div>
-
 </div>
 
-
-<!-- =========================================================
-     PEMINJAMAN MANUAL
-========================================================= -->
-
 <div class="panel mb-4">
-
     <div class="panel-heading">
-
         <div>
-
-            <h2>
-                Catat Peminjaman Manual
-            </h2>
-
-            <p class="form-hint">
-                Digunakan admin atau petugas untuk transaksi langsung di perpustakaan.
-            </p>
-
+            <h2>Catat Peminjaman Manual</h2>
+            <p class="form-hint">Tanggal pinjam dan jatuh tempo dikunci oleh sistem. Petugas hanya memilih peminjam, buku, dan jumlah.</p>
         </div>
-
     </div>
 
-
-    <form
-        action="proses.php"
-        method="POST"
-    >
-
+    <form action="proses.php" method="POST">
         <?= csrfField() ?>
-
-        <input
-            type="hidden"
-            name="action"
-            value="create"
-        >
-
+        <input type="hidden" name="action" value="create">
 
         <div class="row g-3">
-
-
-            <!-- PEMINJAM -->
-
             <div class="col-md-3">
-
-                <label class="form-label">
-                    Peminjam
-                </label>
-
-                <select
-                    name="user_id"
-                    class="form-control"
-                    required
-                >
-
-                    <option value="">
-                        -- Pilih Anggota --
-                    </option>
-
+                <label class="form-label">Peminjam</label>
+                <select name="user_id" class="form-control" required>
+                    <option value="">-- Pilih Anggota --</option>
                     <?php foreach ($members as $member): ?>
-
-                        <option
-                            value="<?= (int) $member['id'] ?>"
-                        >
-
-                            <?= htmlspecialchars(
-                                $member['nama'],
-                                ENT_QUOTES,
-                                'UTF-8'
-                            ) ?>
-
-                            (
-                            <?= htmlspecialchars(
-                                $member['username'],
-                                ENT_QUOTES,
-                                'UTF-8'
-                            ) ?>
-                            )
-
+                        <option value="<?= (int) $member['id'] ?>">
+                            <?= htmlspecialchars($member['nama'], ENT_QUOTES, 'UTF-8') ?> (<?= htmlspecialchars($member['username'], ENT_QUOTES, 'UTF-8') ?>)
                         </option>
-
                     <?php endforeach; ?>
-
                 </select>
-
             </div>
 
+            <div class="col-md-4">
+                <label class="form-label">Buku</label>
+                <select name="book_id" class="form-control" required>
+                    <option value="">-- Pilih Buku --</option>
+                    <?php foreach ($availableBooks as $book): ?>
+                        <option value="<?= (int) $book['id'] ?>">
+                            <?= htmlspecialchars($book['kode_buku'] . ' — ' . $book['judul'], ENT_QUOTES, 'UTF-8') ?> (stok <?= (int) $book['stok_tersedia'] ?>)
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
 
-            <!-- BUKU -->
+            <div class="col-md-2">
+                <label class="form-label">Jumlah</label>
+                <input type="number" name="jumlah" class="form-control" min="1" value="1" required>
+            </div>
 
             <div class="col-md-3">
-
-                <label class="form-label">
-                    Buku
-                </label>
-
-                <select
-                    name="book_id"
-                    class="form-control"
-                    required
-                >
-
-                    <option value="">
-                        -- Pilih Buku --
-                    </option>
-
-                    <?php foreach ($availableBooks as $book): ?>
-
-                        <option
-                            value="<?= (int) $book['id'] ?>"
-                        >
-
-                            <?= htmlspecialchars(
-                                $book['judul'],
-                                ENT_QUOTES,
-                                'UTF-8'
-                            ) ?>
-
-                            — stok
-                            <?= (int) $book['stok_tersedia'] ?>
-
-                        </option>
-
-                    <?php endforeach; ?>
-
-                </select>
-
+                <label class="form-label">Tanggal Otomatis</label>
+                <input type="text" class="form-control" value="<?= htmlspecialchars($today, ENT_QUOTES, 'UTF-8') ?> → <?= htmlspecialchars(date('Y-m-d', strtotime('+7 days')), ENT_QUOTES, 'UTF-8') ?>" readonly>
+                <p class="form-hint">Tidak dikirim dari form; backend menentukan tanggalnya.</p>
             </div>
-
-
-            <!-- TANGGAL PINJAM -->
-
-            <div class="col-md-2">
-
-                <label class="form-label">
-                    Tanggal Pinjam
-                </label>
-
-                <input
-                    type="date"
-                    name="tanggal_pinjam"
-                    id="tanggalPinjam"
-                    class="form-control"
-                    value="<?= $today ?>"
-                    min="<?= $today ?>"
-                    required
-                >
-
-            </div>
-
-
-            <!-- JATUH TEMPO -->
-
-            <div class="col-md-2">
-
-                <label class="form-label">
-                    Jatuh Tempo
-                </label>
-
-                <input
-                    type="date"
-                    name="tanggal_jatuh_tempo"
-                    id="tanggalKembali"
-                    class="form-control"
-                    value="<?= date(
-                        'Y-m-d',
-                        strtotime('+7 days')
-                    ) ?>"
-                    min="<?= $today ?>"
-                    max="<?= date(
-                        'Y-m-d',
-                        strtotime('+7 days')
-                    ) ?>"
-                    required
-                >
-
-            </div>
-
-
-            <!-- CATATAN -->
-
-            <div class="col-md-2">
-
-                <label class="form-label">
-                    Catatan
-                </label>
-
-                <input
-                    type="text"
-                    name="catatan"
-                    class="form-control"
-                    maxlength="255"
-                >
-
-            </div>
-
         </div>
-
 
         <div class="mt-3">
-
-            <button
-                type="submit"
-                class="btn-brand"
-            >
-
-                <i class="fas fa-plus"></i>
-
-                Catat Peminjaman
-
-            </button>
-
+            <button type="submit" class="btn-brand"><i class="fas fa-plus"></i> Catat Peminjaman</button>
         </div>
-
     </form>
-
 </div>
-
-
-<!-- =========================================================
-     RIWAYAT
-========================================================= -->
 
 <div class="panel">
-
     <div class="panel-heading">
-
         <div>
-
-            <h2>
-                Riwayat Peminjaman
-                (<?= count($loans) ?>)
-            </h2>
-
-            <p class="form-hint">
-                Riwayat transaksi peminjaman terbaru.
-            </p>
-
+            <h2>Riwayat Peminjaman</h2>
+            <p class="form-hint">Menampilkan <?= $totalHistory ? $historyOffset + 1 : 0 ?>–<?= min($historyOffset + $historyPerPage, $totalHistory) ?> dari <?= $totalHistory ?> transaksi.</p>
         </div>
-
     </div>
-
 
     <div class="table-wrap">
-
         <table class="data-table">
-
-            <thead>
-
-                <tr>
-
-                    <th>Kode</th>
-
-                    <th>Peminjam</th>
-
-                    <th>Buku</th>
-
-                    <th>Pinjam</th>
-
-                    <th>Jatuh Tempo</th>
-
-                    <th>Kembali</th>
-
-                    <th>Status</th>
-
-                </tr>
-
-            </thead>
-
-
+            <thead><tr><th>No</th><th>Kode</th><th>Peminjam</th><th>Buku</th><th>Pinjam</th><th>Jatuh Tempo</th><th>Kembali</th><th>Status</th></tr></thead>
             <tbody>
-
             <?php if (empty($loans)): ?>
-
-                <tr>
-
-                    <td
-                        colspan="7"
-                        class="text-center text-muted py-4"
-                    >
-
-                        Belum ada riwayat peminjaman.
-
-                    </td>
-
-                </tr>
-
+                <tr><td colspan="8" class="text-center text-muted py-4">Belum ada riwayat peminjaman.</td></tr>
             <?php else: ?>
-
-                <?php foreach ($loans as $loan): ?>
-
+                <?php foreach ($loans as $index => $loan): ?>
                     <?php
-
+                    $rowNo = $historyOffset + $index + 1;
                     $status = $loan['status'];
-
                     $statusLabel = match ($status) {
-
-                        'dipinjam'
-                            => 'Dipinjam',
-
-                        'dikembalikan'
-                            => 'Dikembalikan',
-
-                        'terlambat'
-                            => 'Terlambat',
-
-                        'ditolak'
-                            => 'Ditolak',
-
-                        default
-                            => ucfirst($status),
-
+                        'dipinjam' => 'Dipinjam',
+                        'dikembalikan' => 'Dikembalikan',
+                        'terlambat' => 'Terlambat',
+                        'ditolak' => 'Ditolak',
+                        default => ucfirst($status),
                     };
-
                     ?>
-
                     <tr>
-
-                        <td>
-
-                            <?= htmlspecialchars(
-                                $loan['kode_peminjaman'],
-                                ENT_QUOTES,
-                                'UTF-8'
-                            ) ?>
-
-                        </td>
-
-
-                        <td>
-
-                            <?= htmlspecialchars(
-                                $loan['nama_peminjam'] ?? '-',
-                                ENT_QUOTES,
-                                'UTF-8'
-                            ) ?>
-
-                        </td>
-
-
-                        <td>
-
-                            <?= htmlspecialchars(
-                                $loan['judul_buku'] ?? '-',
-                                ENT_QUOTES,
-                                'UTF-8'
-                            ) ?>
-
-                        </td>
-
-
-                        <td>
-
-                            <?= htmlspecialchars(
-                                $loan['tanggal_pinjam'] ?? '-',
-                                ENT_QUOTES,
-                                'UTF-8'
-                            ) ?>
-
-                        </td>
-
-
-                        <td>
-
-                            <?= htmlspecialchars(
-                                $loan['tanggal_jatuh_tempo'] ?? '-',
-                                ENT_QUOTES,
-                                'UTF-8'
-                            ) ?>
-
-                        </td>
-
-
-                        <td>
-
-                            <?= htmlspecialchars(
-                                $loan['tanggal_kembali'] ?? '-',
-                                ENT_QUOTES,
-                                'UTF-8'
-                            ) ?>
-
-                        </td>
-
-
-                        <td>
-
-                            <span
-                                class="badge-pill badge-<?= htmlspecialchars(
-                                    $status,
-                                    ENT_QUOTES,
-                                    'UTF-8'
-                                ) ?>"
-                            >
-
-                                <?= htmlspecialchars(
-                                    $statusLabel,
-                                    ENT_QUOTES,
-                                    'UTF-8'
-                                ) ?>
-
-                            </span>
-
-                        </td>
-
+                        <td><?= $rowNo ?></td>
+                        <td><?= htmlspecialchars($loan['kode_peminjaman'], ENT_QUOTES, 'UTF-8') ?></td>
+                        <td><?= htmlspecialchars($loan['nama_peminjam'] ?? '-', ENT_QUOTES, 'UTF-8') ?></td>
+                        <td><?= htmlspecialchars($loan['judul_buku'] ?? '-', ENT_QUOTES, 'UTF-8') ?></td>
+                        <td><?= htmlspecialchars($loan['tanggal_pinjam'] ?? '-', ENT_QUOTES, 'UTF-8') ?></td>
+                        <td><?= htmlspecialchars($loan['tanggal_jatuh_tempo'] ?? '-', ENT_QUOTES, 'UTF-8') ?></td>
+                        <td><?= htmlspecialchars($loan['tanggal_kembali'] ?? '-', ENT_QUOTES, 'UTF-8') ?></td>
+                        <td><span class="badge-pill badge-<?= htmlspecialchars($status, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($statusLabel, ENT_QUOTES, 'UTF-8') ?></span></td>
                     </tr>
-
                 <?php endforeach; ?>
-
             <?php endif; ?>
-
             </tbody>
-
         </table>
-
     </div>
 
+    <?php if ($totalHistoryPages > 1): ?>
+        <div class="d-flex justify-content-center align-items-center gap-2 flex-wrap p-3">
+            <?php if ($historyPage > 1): ?>
+                <a class="btn-outline" href="?page=<?= $historyPage - 1 ?>">« Sebelumnya</a>
+            <?php endif; ?>
+
+            <?php
+            $startPage = max(1, $historyPage - 2);
+            $endPage = min($totalHistoryPages, $historyPage + 2);
+            for ($p = $startPage; $p <= $endPage; $p++):
+            ?>
+                <a class="<?= $p === $historyPage ? 'btn-brand' : 'btn-outline' ?>" href="?page=<?= $p ?>"><?= $p ?></a>
+            <?php endfor; ?>
+
+            <?php if ($historyPage < $totalHistoryPages): ?>
+                <a class="btn-outline" href="?page=<?= $historyPage + 1 ?>">Berikutnya »</a>
+            <?php endif; ?>
+        </div>
+    <?php endif; ?>
 </div>
 
-
-<script>
-
-(function () {
-
-    const tanggalPinjam =
-        document.getElementById('tanggalPinjam');
-
-    const tanggalKembali =
-        document.getElementById('tanggalKembali');
-
-    if (!tanggalPinjam || !tanggalKembali) {
-        return;
-    }
-
-
-    function formatTanggal(date) {
-
-        const year =
-            date.getFullYear();
-
-        const month =
-            String(date.getMonth() + 1)
-                .padStart(2, '0');
-
-        const day =
-            String(date.getDate())
-                .padStart(2, '0');
-
-        return `${year}-${month}-${day}`;
-    }
-
-
-    function updateTanggalKembali() {
-
-        if (!tanggalPinjam.value) {
-            return;
-        }
-
-        const pinjam =
-            new Date(
-                tanggalPinjam.value + 'T00:00:00'
-            );
-
-        if (Number.isNaN(pinjam.getTime())) {
-            return;
-        }
-
-
-        const maksimal =
-            new Date(pinjam);
-
-        maksimal.setDate(
-            maksimal.getDate() + 7
-        );
-
-
-        const min =
-            formatTanggal(pinjam);
-
-        const max =
-            formatTanggal(maksimal);
-
-
-        tanggalKembali.min = min;
-        tanggalKembali.max = max;
-
-
-        if (
-            tanggalKembali.value < min ||
-            tanggalKembali.value > max
-        ) {
-
-            tanggalKembali.value = max;
-
-        }
-
-    }
-
-
-    tanggalPinjam.addEventListener(
-        'change',
-        updateTanggalKembali
-    );
-
-
-    updateTanggalKembali();
-
-})();
-
-</script>
+<?php require_once __DIR__ . '/../layouts/footer.php'; ?>

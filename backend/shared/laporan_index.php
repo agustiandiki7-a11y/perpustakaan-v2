@@ -25,6 +25,7 @@ if (in_array($status, ['dipinjam', 'dikembalikan', 'terlambat'], true)) {
 
 $sql = "SELECT loans.kode_peminjaman, loans.tanggal_pinjam, loans.tanggal_jatuh_tempo,
                loans.tanggal_kembali, loans.status, loans.catatan,
+               loans.kondisi_buku, loans.denda_total, loans.bukti_pengembalian,
                users.nama AS nama_peminjam,
                GROUP_CONCAT(books.judul ORDER BY books.judul SEPARATOR ', ') AS judul_buku
         FROM loans
@@ -117,12 +118,14 @@ foreach ($rows as $row) {
                     <th>Pinjam</th>
                     <th>Jatuh Tempo</th>
                     <th>Kembali</th>
+                    <th>Kondisi</th>
+                    <th>Denda</th>
                     <th>Status</th>
                 </tr>
             </thead>
             <tbody>
                 <?php if (!$rows): ?>
-                    <tr><td colspan="8" class="text-center py-4">Tidak ada data untuk filter yang dipilih.</td></tr>
+                    <tr><td colspan="10" class="text-center py-4">Tidak ada data untuk filter yang dipilih.</td></tr>
                 <?php else: ?>
                     <?php foreach ($rows as $i => $row): ?>
                         <tr>
@@ -133,6 +136,8 @@ foreach ($rows as $row) {
                             <td><?= htmlspecialchars($row['tanggal_pinjam'] ?? '-', ENT_QUOTES, 'UTF-8') ?></td>
                             <td><?= htmlspecialchars($row['tanggal_jatuh_tempo'] ?? '-', ENT_QUOTES, 'UTF-8') ?></td>
                             <td><?= htmlspecialchars($row['tanggal_kembali'] ?? '-', ENT_QUOTES, 'UTF-8') ?></td>
+                            <td><?= htmlspecialchars(ucwords(str_replace('_', ' ', $row['kondisi_buku'] ?? '-')), ENT_QUOTES, 'UTF-8') ?></td>
+                            <td>Rp<?= number_format((float) ($row['denda_total'] ?? 0), 0, ',', '.') ?></td>
                             <td><span class="badge-pill badge-<?= htmlspecialchars($row['status'], ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars(ucfirst($row['status']), ENT_QUOTES, 'UTF-8') ?></span></td>
                         </tr>
                     <?php endforeach; ?>

@@ -80,6 +80,13 @@ unset($_SESSION['old_register']);
                        value="<?= htmlspecialchars($old['nama'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
             </div>
 
+            <div class="form-group">
+                <label for="nik">NIK</label>
+                <input type="text" id="nik" name="nik" required maxlength="16" minlength="16" inputmode="numeric" pattern="\d{16}"
+                       value="<?= htmlspecialchars($old['nik'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
+                <p class="form-hint">16 digit. Digunakan sebagai identitas unik agar akun tidak mudah digandakan untuk menghindari denda.</p>
+            </div>
+
             <div class="form-row">
                 <div class="form-group">
                     <label for="username">Username</label>

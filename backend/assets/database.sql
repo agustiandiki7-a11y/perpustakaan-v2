@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS users (
     nama VARCHAR(150) NOT NULL,
     username VARCHAR(50) NOT NULL UNIQUE,
     email VARCHAR(150) NOT NULL UNIQUE,
+    nik VARCHAR(16) NULL UNIQUE,
     password VARCHAR(255) NOT NULL,
     role ENUM('admin', 'petugas', 'peminjam') NOT NULL DEFAULT 'peminjam',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -70,6 +71,12 @@ CREATE TABLE IF NOT EXISTS loans (
     status ENUM('menunggu', 'dipinjam', 'dikembalikan', 'terlambat', 'ditolak') NOT NULL DEFAULT 'menunggu',
     catatan VARCHAR(255) NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    bukti_pengembalian VARCHAR(255) NULL,
+    kondisi_buku ENUM('baik', 'rusak_ringan', 'rusak_berat') NULL,
+    denda_keterlambatan DECIMAL(12,2) NOT NULL DEFAULT 0,
+    denda_kerusakan DECIMAL(12,2) NOT NULL DEFAULT 0,
+    denda_total DECIMAL(12,2) NOT NULL DEFAULT 0,
+    denda_dibayar TINYINT(1) NOT NULL DEFAULT 0,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT fk_loans_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT
 ) ENGINE=InnoDB;

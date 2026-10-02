@@ -1,75 +1,140 @@
 <?php
-
 require_once __DIR__ . '/../../app/config/Database.php';
 require_once __DIR__ . '/../../app/helpers/auth.php';
 
 mulaiSession();
 applySecurityHeaders();
 
-if (!sudahLogin()) {
-    header('Location: ' . baseUrlPath() . '/login/pages/login.php');
-    exit;
+$routeRole = null;
+if (preg_match('#/backend/(admin|petugas)(?:/|$)#i', str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? ''), $match)) {
+    $routeRole = strtolower($match[1]);
 }
+cekRole($routeRole ? [$routeRole] : ['admin', 'petugas']);
 
-$me = currentUser();
-$role = strtolower(trim((string)($me['role'] ?? '')));
+$redirect = baseUrlPath() . '/backend/' . ($routeRole ?: (currentUser()['role'] ?? 'petugas')) . '/peminjaman/index.php';
 
-if (!in_array($role, ['admin', 'petugas'], true)) {
-    http_response_code(403);
-    exit('Akses ditolak.');
-}
-
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !verifyCsrf($_POST['csrf_token'] ?? null)) {
     setFlash('error', 'Permintaan tidak valid.');
-    header('Location: ' . baseUrlPath() . '/backend/' . $role . '/peminjaman/index.php');
+    header('Location: ' . $redirect);
     exit;
 }
 
-if (!verifyCsrf($_POST['csrf_token'] ?? null)) {
-    setFlash('error', 'Token keamanan tidak valid. Silakan coba lagi.');
-    header('Location: ' . baseUrlPath() . '/backend/' . $role . '/peminjaman/index.php');
-    exit;
-}
-
-$action = strtolower(trim((string)($_POST['action'] ?? '')));
-$loanId = (int)($_POST['loan_id'] ?? 0);
-
-if ($loanId <= 0) {
-    setFlash('error', 'ID peminjaman tidak valid.');
-    header('Location: ' . baseUrlPath() . '/backend/' . $role . '/peminjaman/index.php');
-    exit;
-}
-
-if (!in_array($action, ['konfirmasi', 'setujui', 'tolak'], true)) {
-    setFlash('error', 'Aksi peminjaman tidak valid.');
-    header('Location: ' . baseUrlPath() . '/backend/' . $role . '/peminjaman/index.php');
-    exit;
-}
-
-$redirect = baseUrlPath() . '/backend/' . $role . '/peminjaman/index.php';
 $db = (new Database())->connect();
+$action = strtolower(trim((string) ($_POST['action'] ?? '')));
 
 try {
+    if ($action === 'create') {
+        $userId = (int) ($_POST['user_id'] ?? 0);
+        $bookId = (int) ($_POST['book_id'] ?? 0);
+        $jumlah = (int) ($_POST['jumlah'] ?? 1);
+
+        if ($userId <= 0 || $bookId <= 0 || $jumlah <= 0) {
+            setFlash('error', 'Data peminjaman manual tidak valid.');
+            header('Location: ' . $redirect);
+            exit;
+        }
+
+        $db->beginTransaction();
+
+        $stmtUser = $db->prepare("SELECT id, nama FROM users WHERE id = ? AND role = 'peminjam' LIMIT 1");
+        $stmtUser->execute([$userId]);
+        $user = $stmtUser->fetch();
+
+        $stmtBook = $db->prepare("
+            SELECT id, judul, stok_tersedia
+            FROM books
+            WHERE id = ? AND status = 'aktif'
+            FOR UPDATE
+        ");
+        $stmtBook->execute([$bookId]);
+        $book = $stmtBook->fetch();
+
+        if (!$user || !$book) {
+            $db->rollBack();
+            setFlash('error', 'Peminjam atau buku tidak ditemukan.');
+            header('Location: ' . $redirect);
+            exit;
+        }
+
+        if ((int) $book['stok_tersedia'] < $jumlah) {
+            $db->rollBack();
+            setFlash('error', 'Stok buku tidak mencukupi.');
+            header('Location: ' . $redirect);
+            exit;
+        }
+
+        do {
+            $kode = 'PJM-' . date('Ymd') . '-' . random_int(1000, 9999);
+            $cekKode = $db->prepare('SELECT id FROM loans WHERE kode_peminjaman = ? LIMIT 1');
+            $cekKode->execute([$kode]);
+        } while ($cekKode->fetchColumn());
+
+        $tanggalPinjam = date('Y-m-d');
+        $tanggalJatuhTempo = date('Y-m-d', strtotime('+7 days'));
+
+        $stmtLoan = $db->prepare("
+            INSERT INTO loans
+            (kode_peminjaman, user_id, tanggal_pengajuan, tanggal_pinjam, tanggal_jatuh_tempo, status, catatan)
+            VALUES (?, ?, ?, ?, ?, 'dipinjam', ?)
+        ");
+        $stmtLoan->execute([
+            $kode,
+            $userId,
+            $tanggalPinjam,
+            $tanggalPinjam,
+            $tanggalJatuhTempo,
+            'Peminjaman manual dicatat oleh ' . (currentUser()['nama'] ?: 'Petugas') . '.'
+        ]);
+
+        $loanId = (int) $db->lastInsertId();
+
+        $stmtDetail = $db->prepare('INSERT INTO loan_details (loan_id, book_id, jumlah) VALUES (?, ?, ?)');
+        $stmtDetail->execute([$loanId, $bookId, $jumlah]);
+
+        $stmtStok = $db->prepare("
+            UPDATE books
+            SET stok_tersedia = stok_tersedia - ?
+            WHERE id = ? AND stok_tersedia >= ?
+        ");
+        $stmtStok->execute([$jumlah, $bookId, $jumlah]);
+
+        if ($stmtStok->rowCount() !== 1) {
+            $db->rollBack();
+            setFlash('error', 'Stok buku berubah. Silakan coba lagi.');
+            header('Location: ' . $redirect);
+            exit;
+        }
+
+        $db->commit();
+        setFlash('success', "Peminjaman manual {$kode} berhasil dicatat. Tanggal pengembalian ditetapkan otomatis 7 hari.");
+        header('Location: ' . $redirect);
+        exit;
+    }
+
+    $loanId = filter_input(INPUT_POST, 'loan_id', FILTER_VALIDATE_INT);
+    if (!$loanId || $loanId <= 0) {
+        setFlash('error', 'ID peminjaman tidak valid.');
+        header('Location: ' . $redirect);
+        exit;
+    }
+
+    if (!in_array($action, ['konfirmasi', 'setujui', 'tolak'], true)) {
+        setFlash('error', 'Aksi peminjaman tidak valid.');
+        header('Location: ' . $redirect);
+        exit;
+    }
+
     $db->beginTransaction();
 
     $stmt = $db->prepare("
-        SELECT
-            loans.id,
-            loans.status,
-            loans.kode_peminjaman,
-            loan_details.book_id,
-            loan_details.jumlah,
-            books.judul,
-            books.stok_tersedia
+        SELECT loans.id, loans.status, loans.kode_peminjaman
         FROM loans
-        INNER JOIN loan_details ON loan_details.loan_id = loans.id
-        INNER JOIN books ON books.id = loan_details.book_id
         WHERE loans.id = ?
         LIMIT 1
         FOR UPDATE
     ");
     $stmt->execute([$loanId]);
-    $loan = $stmt->fetch(PDO::FETCH_ASSOC);
+    $loan = $stmt->fetch();
 
     if (!$loan) {
         $db->rollBack();
@@ -86,15 +151,13 @@ try {
     }
 
     if ($action === 'tolak') {
-        $namaPetugas = $me['nama'] ?: ($me['username'] ?? 'Petugas');
-        $catatan = 'Peminjaman ditolak oleh ' . $namaPetugas . '.';
-
+        $namaPetugas = currentUser()['nama'] ?: (currentUser()['username'] ?? 'Petugas');
         $stmt = $db->prepare("
             UPDATE loans
             SET status = 'ditolak', catatan = ?
             WHERE id = ? AND status = 'menunggu'
         ");
-        $stmt->execute([$catatan, $loanId]);
+        $stmt->execute(['Peminjaman ditolak oleh ' . $namaPetugas . '.', $loanId]);
 
         $db->commit();
         setFlash('success', 'Peminjaman berhasil ditolak.');
@@ -102,52 +165,63 @@ try {
         exit;
     }
 
-    $jumlah = (int)$loan['jumlah'];
-    $stok = (int)$loan['stok_tersedia'];
+    $stmtDetails = $db->prepare("
+        SELECT ld.book_id, ld.jumlah, b.judul, b.stok_tersedia
+        FROM loan_details ld
+        INNER JOIN books b ON b.id = ld.book_id
+        WHERE ld.loan_id = ?
+        FOR UPDATE
+    ");
+    $stmtDetails->execute([$loanId]);
+    $details = $stmtDetails->fetchAll();
 
-    if ($jumlah <= 0) {
+    if (!$details) {
         $db->rollBack();
-        setFlash('error', 'Jumlah buku tidak valid.');
+        setFlash('error', 'Detail buku pada peminjaman tidak ditemukan.');
         header('Location: ' . $redirect);
         exit;
     }
 
-    if ($stok < $jumlah) {
-        $db->rollBack();
-        setFlash('error', 'Stok buku tidak mencukupi.');
-        header('Location: ' . $redirect);
-        exit;
+    foreach ($details as $detail) {
+        if ((int) $detail['jumlah'] <= 0 || (int) $detail['stok_tersedia'] < (int) $detail['jumlah']) {
+            $db->rollBack();
+            setFlash('error', 'Stok salah satu buku tidak mencukupi.');
+            header('Location: ' . $redirect);
+            exit;
+        }
+    }
+
+    foreach ($details as $detail) {
+        $stmtStok = $db->prepare("
+            UPDATE books
+            SET stok_tersedia = stok_tersedia - ?
+            WHERE id = ? AND stok_tersedia >= ?
+        ");
+        $stmtStok->execute([
+            (int) $detail['jumlah'],
+            (int) $detail['book_id'],
+            (int) $detail['jumlah']
+        ]);
     }
 
     $tanggalPinjam = date('Y-m-d');
     $tanggalJatuhTempo = date('Y-m-d', strtotime('+7 days'));
-    $namaPetugas = $me['nama'] ?: ($me['username'] ?? 'Petugas');
-    $catatan = 'Peminjaman disetujui oleh ' . $namaPetugas . '.';
-
-    $stmtStok = $db->prepare("
-        UPDATE books
-        SET stok_tersedia = stok_tersedia - ?
-        WHERE id = ? AND stok_tersedia >= ?
-    ");
-    $stmtStok->execute([$jumlah, $loan['book_id'], $jumlah]);
-
-    if ($stmtStok->rowCount() !== 1) {
-        $db->rollBack();
-        setFlash('error', 'Stok buku tidak mencukupi atau sudah berubah.');
-        header('Location: ' . $redirect);
-        exit;
-    }
+    $namaPetugas = currentUser()['nama'] ?: (currentUser()['username'] ?? 'Petugas');
 
     $stmtApprove = $db->prepare("
         UPDATE loans
-        SET
-            status = 'dipinjam',
+        SET status = 'dipinjam',
             tanggal_pinjam = ?,
             tanggal_jatuh_tempo = ?,
             catatan = ?
         WHERE id = ? AND status = 'menunggu'
     ");
-    $stmtApprove->execute([$tanggalPinjam, $tanggalJatuhTempo, $catatan, $loanId]);
+    $stmtApprove->execute([
+        $tanggalPinjam,
+        $tanggalJatuhTempo,
+        'Peminjaman disetujui oleh ' . $namaPetugas . '.',
+        $loanId
+    ]);
 
     if ($stmtApprove->rowCount() !== 1) {
         $db->rollBack();
@@ -157,17 +231,14 @@ try {
     }
 
     $db->commit();
-    setFlash('success', 'Peminjaman berhasil disetujui dan status menjadi dipinjam.');
-    header('Location: ' . $redirect);
-    exit;
-
+    setFlash('success', 'Peminjaman berhasil disetujui. Tanggal pinjam dan jatuh tempo dibuat otomatis oleh sistem.');
 } catch (PDOException $e) {
     if ($db->inTransaction()) {
         $db->rollBack();
     }
-
     error_log('Peminjaman proses error: ' . $e->getMessage());
     setFlash('error', 'Terjadi kesalahan sistem saat memproses peminjaman.');
-    header('Location: ' . $redirect);
-    exit;
 }
+
+header('Location: ' . $redirect);
+exit;

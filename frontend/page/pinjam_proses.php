@@ -20,6 +20,33 @@ if (($me['role'] ?? '') !== 'peminjam') {
     exit('Akses ditolak.');
 }
 
+try {
+    $db = (new Database())->connect();
+
+    // Peminjam yang masih memiliki denda belum dibayar tidak dapat membuat
+    // transaksi baru. Ini mencegah denda dilewati hanya dengan transaksi lain.
+    $stmtDenda = $db->prepare("
+        SELECT COALESCE(SUM(denda_total), 0) AS total_denda
+        FROM loans
+        WHERE user_id = ?
+          AND denda_total > 0
+          AND denda_dibayar = 0
+    ");
+    $stmtDenda->execute([$me['id']]);
+    $totalDendaBelumBayar = (float) $stmtDenda->fetchColumn();
+
+    if ($totalDendaBelumBayar > 0) {
+        setFlash('error', 'Kamu masih memiliki denda Rp' . number_format($totalDendaBelumBayar, 0, ',', '.') . ' yang belum dibayar. Selesaikan denda terlebih dahulu.');
+        header('Location: ../../index.php');
+        exit;
+    }
+} catch (PDOException $e) {
+    error_log('Cek denda peminjam error: ' . $e->getMessage());
+    setFlash('error', 'Sistem tidak dapat memeriksa status denda. Silakan coba lagi.');
+    header('Location: ../../index.php');
+    exit;
+}
+
 if (
     $_SERVER['REQUEST_METHOD'] !== 'POST' ||
     !verifyCsrf($_POST['csrf_token'] ?? null)
@@ -39,8 +66,6 @@ if ($bookId <= 0 || $jumlah <= 0) {
 }
 
 try {
-    $db = (new Database())->connect();
-
     $db->beginTransaction();
 
     /*
